@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { NomineeBrowser } from "@/components/nominee-browser";
+import { PublicPageShell } from "@/components/public-page-shell";
 import { getCurrentVoter } from "@/lib/data";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { submitVoteAction } from "@/app/actions";
@@ -100,7 +101,7 @@ export default async function CategoryVotePage({
       : existingVoteBrand?.display_name ?? null;
 
   return (
-    <div className="page-shell">
+    <PublicPageShell>
       <div className="panel p-6">
         <Link href="/vote" className="eyebrow">
           Back to categories
@@ -140,6 +141,6 @@ export default async function CategoryVotePage({
           </div>
         )}
       </div>
-    </div>
+    </PublicPageShell>
   );
 }

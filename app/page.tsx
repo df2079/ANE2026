@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { startVotingAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
+import { PublicPageShell } from "@/components/public-page-shell";
 import { formatDateTime } from "@/lib/utils";
 import { getVotingHomeData } from "@/lib/data";
 
@@ -23,7 +24,7 @@ export default async function LandingPage({
 
   if (voter) {
     return (
-      <div className="page-shell">
+      <PublicPageShell>
         <div className="panel p-6">
           <p className="eyebrow mb-2">Welcome back</p>
           <h1 className="text-3xl font-semibold">Art Niche Expo Awards 2026</h1>
@@ -39,12 +40,12 @@ export default async function LandingPage({
             </Link>
           </div>
         </div>
-      </div>
+      </PublicPageShell>
     );
   }
 
   return (
-    <div className="page-shell">
+    <PublicPageShell>
       <div className="panel overflow-hidden">
         <div className="border-b border-[color:var(--border)] px-6 py-5">
           <p className="eyebrow mb-2">Art Niche Expo Awards 2026</p>
@@ -120,6 +121,6 @@ export default async function LandingPage({
           </Link>
         </div>
       </div>
-    </div>
+    </PublicPageShell>
   );
 }

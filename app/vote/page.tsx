@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CategoryCard } from "@/components/category-card";
+import { PublicPageShell } from "@/components/public-page-shell";
 import { getVotingHomeData } from "@/lib/data";
 import { formatDateTime } from "@/lib/utils";
 import { resetVotingSessionAction } from "@/app/actions";
@@ -11,7 +12,7 @@ export default async function VoteHomePage() {
 
   if (!voter) {
     return (
-      <div className="page-shell">
+      <PublicPageShell>
         <div className="panel p-6">
           <h1 className="text-2xl font-semibold">Start from the main voting page</h1>
           <p className="mt-3 text-sm text-[color:var(--muted)]">
@@ -21,12 +22,12 @@ export default async function VoteHomePage() {
             Open landing page
           </Link>
         </div>
-      </div>
+      </PublicPageShell>
     );
   }
 
   return (
-    <div className="page-shell">
+    <PublicPageShell>
       <div className="panel p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -65,6 +66,6 @@ export default async function VoteHomePage() {
           </div>
         )}
       </div>
-    </div>
+    </PublicPageShell>
   );
 }

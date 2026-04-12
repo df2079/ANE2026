@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicPageShell } from "@/components/public-page-shell";
 import { getPublicResultsData } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,7 @@ export default async function PublicResultsPage() {
   const results = await getPublicResultsData();
 
   return (
-    <div className="page-shell">
+    <PublicPageShell>
       <div className="panel p-6">
         <p className="eyebrow mb-2">Results</p>
         <h1 className="text-3xl font-semibold">Art Niche Expo Awards 2026</h1>
@@ -36,6 +37,6 @@ export default async function PublicResultsPage() {
           </div>
         )}
       </div>
-    </div>
+    </PublicPageShell>
   );
 }

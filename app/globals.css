@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f5f1e8;
-  --foreground: #1e1b16;
-  --card: rgba(255, 252, 246, 0.88);
-  --card-strong: #fffaf2;
-  --border: rgba(64, 48, 30, 0.12);
-  --muted: #6c6256;
-  --accent: #8a5b2b;
-  --accent-foreground: #fffaf3;
-  --success: #1f6f43;
-  --danger: #8b3530;
+  --background: #eef1ef;
+  --foreground: #171c18;
+  --card: rgba(255, 255, 255, 0.9);
+  --card-strong: #fbfcfb;
+  --border: rgba(20, 31, 23, 0.1);
+  --muted: #5e6762;
+  --accent: #14a858;
+  --accent-foreground: #f8fcf9;
+  --success: #128048;
+  --danger: #963b3b;
 }
 
 html {
@@ -19,11 +19,13 @@ html {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(184, 142, 82, 0.16), transparent 32%),
-    linear-gradient(180deg, #f9f5ee 0%, #f1ebdf 100%);
+    radial-gradient(circle at top, rgba(20, 168, 88, 0.08), transparent 32%),
+    linear-gradient(180deg, #f6f7f6 0%, #ecefed 48%, #e8ece9 100%);
   color: var(--foreground);
-  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  font-family: var(--font-raleway), sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 input,
@@ -40,14 +42,14 @@ button,
 }
 
 .page-shell {
-  @apply mx-auto min-h-screen w-full max-w-md px-4 pb-16 pt-6 sm:max-w-3xl;
+  @apply mx-auto min-h-screen w-full max-w-md px-4 pb-16 pt-8 sm:max-w-3xl sm:px-6 sm:pt-10;
 }
 
 .panel {
   background: var(--card);
   border: 1px solid var(--border);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 20px 40px rgba(59, 42, 18, 0.08);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 38px rgba(23, 28, 24, 0.08);
   @apply rounded-3xl;
 }
 
@@ -58,22 +60,31 @@ button,
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition hover:bg-white/60 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-50;
   border-color: var(--border);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .field {
-  @apply w-full rounded-2xl border bg-white/85 px-4 py-3 outline-none transition focus:ring-2;
+  @apply w-full rounded-2xl border bg-white/88 px-4 py-3 outline-none transition focus:ring-2;
   border-color: var(--border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  focus-ring-color: rgba(138, 91, 43, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  focus-ring-color: rgba(20, 168, 88, 0.18);
 }
 
 .eyebrow {
-  @apply text-xs uppercase tracking-[0.28em];
+  @apply text-xs uppercase tracking-[0.24em];
   color: var(--muted);
 }
 
 .status-pill {
   @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+}
+
+.public-logo-wrap {
+  @apply mb-6 flex justify-center sm:mb-8;
+}
+
+.public-logo {
+  @apply h-auto w-auto object-contain opacity-95;
 }

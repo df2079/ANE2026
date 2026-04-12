@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublicPageShell } from "@/components/public-page-shell";
 import { getAppSettings } from "@/lib/settings";
 import { formatDateTime } from "@/lib/utils";
 
@@ -8,7 +9,7 @@ export default async function ThanksPage() {
   const settings = await getAppSettings();
 
   return (
-    <div className="page-shell">
+    <PublicPageShell>
       <div className="panel p-6">
         <p className="eyebrow mb-2">Thank you</p>
         <h1 className="text-3xl font-semibold">Your vote has been recorded</h1>
@@ -22,6 +23,6 @@ export default async function ThanksPage() {
           Back to categories
         </Link>
       </div>
-    </div>
+    </PublicPageShell>
   );
 }
