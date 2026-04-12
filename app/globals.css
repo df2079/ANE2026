@@ -28,6 +28,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+p,
+li,
+label,
+small {
+  font-weight: 500;
+}
+
 input,
 button,
 select,
@@ -73,7 +80,7 @@ button,
 }
 
 .eyebrow {
-  @apply text-xs uppercase tracking-[0.24em];
+  @apply text-xs font-semibold uppercase tracking-[0.24em];
   color: var(--muted);
 }
 
@@ -86,5 +93,9 @@ button,
 }
 
 .public-logo {
-  @apply h-auto w-auto object-contain opacity-95;
+  @apply h-auto w-[132px] object-contain opacity-95 sm:w-[220px];
+}
+
+.admin-shell-action {
+  @apply px-4 py-2.5 text-[13px];
 }

@@ -116,9 +116,11 @@ export default async function LandingPage({
             </form>
           ) : null}
 
-          <Link href="/results" className="btn-secondary w-full text-center">
-            View published results
-          </Link>
+          {settings.results_revealed_at ? (
+            <Link href="/results" className="btn-secondary w-full text-center">
+              View published results
+            </Link>
+          ) : null}
         </div>
       </div>
     </PublicPageShell>

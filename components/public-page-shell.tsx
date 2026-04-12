@@ -16,6 +16,7 @@ export function PublicPageShell({
           width={logoWidth}
           height={Math.round(logoWidth * 0.84)}
           className="public-logo"
+          sizes="(max-width: 640px) 132px, 220px"
           priority
         />
       </div>
