@@ -1,0 +1,40 @@
+{
+  "name": "art-niche-expo-voting",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "demo:workbook": "node scripts/generate-demo-workbook.mjs",
+    "env:validate": "node scripts/validate-env.mjs",
+    "supabase:local:start": "npx supabase start",
+    "supabase:local:stop": "npx supabase stop",
+    "supabase:local:status": "npx supabase status",
+    "supabase:db:reset": "npx supabase db reset",
+    "supabase:db:push": "npx supabase db push",
+    "supabase:link": "npx supabase link"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.49.1",
+    "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^0.511.0",
+    "next": "15.5.15",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.3.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.3",
+    "@types/node": "^22.13.13",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "tailwindcss": "^4.1.3",
+    "typescript": "^5.8.2"
+  }
+}

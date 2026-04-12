@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f1e8;
+  --foreground: #1e1b16;
+  --card: rgba(255, 252, 246, 0.88);
+  --card-strong: #fffaf2;
+  --border: rgba(64, 48, 30, 0.12);
+  --muted: #6c6256;
+  --accent: #8a5b2b;
+  --accent-foreground: #fffaf3;
+  --success: #1f6f43;
+  --danger: #8b3530;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(184, 142, 82, 0.16), transparent 32%),
+    linear-gradient(180deg, #f9f5ee 0%, #f1ebdf 100%);
+  color: var(--foreground);
+  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+  min-height: 100vh;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+}
+
+a,
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+.page-shell {
+  @apply mx-auto min-h-screen w-full max-w-md px-4 pb-16 pt-6 sm:max-w-3xl;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 20px 40px rgba(59, 42, 18, 0.08);
+  @apply rounded-3xl;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition hover:bg-white/60 disabled:cursor-not-allowed disabled:opacity-50;
+  border-color: var(--border);
+}
+
+.field {
+  @apply w-full rounded-2xl border bg-white/85 px-4 py-3 outline-none transition focus:ring-2;
+  border-color: var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  focus-ring-color: rgba(138, 91, 43, 0.25);
+}
+
+.eyebrow {
+  @apply text-xs uppercase tracking-[0.28em];
+  color: var(--muted);
+}
+
+.status-pill {
+  @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+}
