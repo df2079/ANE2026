@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getAllowedAdminEmails, requireAdminUser } from "@/lib/auth";
+import { getAllowedAdminEmails, isAllowedAdminEmail, requireAdminUser } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
@@ -22,7 +22,8 @@ import {
 } from "@/lib/data";
 
 const loginSchema = z.object({
-  email: z.string().email()
+  email: z.string().email(),
+  password: z.string().min(1)
 });
 
 async function logVoteAttempt(params: {
@@ -81,11 +82,12 @@ async function getLatestUploadedImportLog(supabase: ReturnType<typeof createSupa
 
 export async function adminLoginAction(formData: FormData) {
   const parsed = loginSchema.safeParse({
-    email: formData.get("email")
+    email: formData.get("email"),
+    password: formData.get("password")
   });
 
   if (!parsed.success) {
-    redirect("/admin/login?error=invalid-email");
+    redirect("/admin/login?error=invalid-form");
   }
 
   const normalizedRequestedEmail = normalizeEmail(parsed.data.email);
@@ -96,38 +98,34 @@ export async function adminLoginAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const email = normalizedRequestedEmail;
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: `${env.APP_BASE_URL}/auth/callback`
-    }
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: normalizedRequestedEmail,
+    password: parsed.data.password
   });
 
   if (error) {
     const message = error.message.toLowerCase();
-    const code = error.code?.toLowerCase?.() ?? "";
-
-    if (
-      error.status === 429 ||
-      code === "over_email_send_rate_limit" ||
-      message.includes("rate limit")
-    ) {
-      redirect("/admin/login?error=rate-limited");
+    if (message.includes("invalid login credentials")) {
+      redirect("/admin/login?error=invalid-credentials");
     }
 
-    if (message.includes("redirect") || message.includes("redirect_to") || message.includes("flow_state")) {
-      redirect("/admin/login?error=redirect-misconfigured");
+    if (message.includes("email not confirmed")) {
+      redirect("/admin/login?error=email-not-confirmed");
     }
 
-    if (message.includes("email provider is disabled") || message.includes("email logins are disabled")) {
-      redirect("/admin/login?error=email-provider-disabled");
+    if (message.includes("email logins are disabled") || message.includes("password sign")) {
+      redirect("/admin/login?error=password-provider-disabled");
     }
 
-    redirect("/admin/login?error=send-failed");
+    redirect("/admin/login?error=auth-failed");
   }
 
-  redirect("/admin/login?sent=1");
+  if (!data.user || !isAllowedAdminEmail(data.user.email)) {
+    await supabase.auth.signOut();
+    redirect("/admin/login?error=not-allowed");
+  }
+
+  redirect("/admin");
 }
 
 export async function adminLogoutAction() {

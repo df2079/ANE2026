@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 export default async function AdminLoginPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error, sent } = await searchParams;
+  const { error } = await searchParams;
 
   return (
     <div className="page-shell">
@@ -17,31 +17,26 @@ export default async function AdminLoginPage({
         <p className="eyebrow mb-2">Admin login</p>
         <h1 className="text-3xl font-semibold">Access the organizer console</h1>
         <p className="mt-3 text-sm text-[color:var(--muted)]">
-          Use a pre-approved admin email address. A magic link will be sent through Supabase auth.
+          Sign in with your approved admin email address and password.
         </p>
 
         {error ? (
           <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error === "not-allowed"
               ? "This email is not allowlisted for admin access."
-              : error === "rate-limited"
-                ? "Supabase rejected the login email with: over_email_send_rate_limit (email rate limit exceeded). Please wait a bit before trying again."
-              : error === "redirect-misconfigured"
-                ? "Supabase rejected the auth redirect URL. Check APP_BASE_URL and the allowed redirect URLs in Supabase Auth."
-                : error === "email-provider-disabled"
-                  ? "Supabase email login is not enabled for this project."
-                : error === "send-failed"
-                  ? "Supabase could not send the magic link email. Please check the project auth/email configuration and try again."
-              : error === "callback-failed"
-                ? "This magic link could not be completed. Please request a new one."
-                : error === "missing-code"
-                  ? "This magic link is incomplete. Please request a new one."
-                  : "Admin login could not be started."}
-          </div>
-        ) : null}
-        {sent ? (
-          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            Magic link sent. Open your email on this device and come back after signing in.
+              : error === "invalid-credentials"
+                ? "The email or password is incorrect."
+                : error === "email-not-confirmed"
+                  ? "This admin account has not confirmed its email address yet."
+                  : error === "password-provider-disabled"
+                    ? "Supabase email and password login is not enabled for this project."
+                    : error === "callback-failed" || error === "missing-code"
+                      ? "Magic-link admin sign-in is no longer the intended flow. Please sign in with email and password."
+                      : error === "invalid-form"
+                        ? "Please enter both email and password."
+                        : error === "auth-failed"
+                          ? "Admin sign-in could not be completed. Please try again."
+                          : "Admin login could not be started."}
           </div>
         ) : null}
 
@@ -50,7 +45,11 @@ export default async function AdminLoginPage({
             <label className="mb-2 block text-sm font-medium">Admin email</label>
             <input name="email" type="email" required className="field" placeholder="admin@example.com" />
           </div>
-          <SubmitButton pendingLabel="Sending magic link...">Send magic link</SubmitButton>
+          <div>
+            <label className="mb-2 block text-sm font-medium">Password</label>
+            <input name="password" type="password" required className="field" placeholder="Password" />
+          </div>
+          <SubmitButton pendingLabel="Signing in...">Sign in</SubmitButton>
         </form>
 
         <Link href="/" className="btn-secondary mt-4">
