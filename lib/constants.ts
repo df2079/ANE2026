@@ -10,6 +10,8 @@ export const GLOBALLY_EXCLUDED_BRANDS = ["CALAJ", "Maison Evandie"];
 export const DEFAULT_SETTINGS = {
   voting_start_at: null as string | null,
   voting_end_at: null as string | null,
+  voting_opened_at: null as string | null,
+  voting_closed_at: null as string | null,
   results_revealed_at: null as string | null
 };
 

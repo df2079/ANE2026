@@ -11,7 +11,7 @@ import type { Json } from "@/lib/types";
 import { normalizeEmail, normalizeWhitespace, slugify } from "@/lib/utils";
 import { getIpHash } from "@/lib/ip";
 import { syncWorkbookImport } from "@/lib/importer";
-import { getAppSettings, upsertSettings } from "@/lib/settings";
+import { getAppSettings, getVotingLifecycle, upsertSettings } from "@/lib/settings";
 import {
   clearCurrentVoterCookie,
   createDeviceToken,
@@ -54,13 +54,6 @@ async function logAdminAudit(action: string, actorEmail: string | null, metadata
 
 function redirectVoteError(categoryId: string, error: string): never {
   redirect(`/vote/${categoryId}?error=${encodeURIComponent(error)}`);
-}
-
-function isVotingOpen(settings: Awaited<ReturnType<typeof getAppSettings>>) {
-  const now = Date.now();
-  const started = settings.voting_start_at ? new Date(settings.voting_start_at).getTime() <= now : true;
-  const ended = settings.voting_end_at ? new Date(settings.voting_end_at).getTime() <= now : false;
-  return started && !ended && !settings.results_revealed_at;
 }
 
 async function getLatestUploadedImportLog(supabase: ReturnType<typeof createSupabaseAdminClient>) {
@@ -182,7 +175,7 @@ export async function syncLatestWorkbookAction() {
   const supabase = createSupabaseAdminClient();
   const settings = await getAppSettings();
 
-  if (isVotingOpen(settings)) {
+  if (getVotingLifecycle(settings).isLive) {
     redirect("/admin/imports?error=voting-open");
   }
 
@@ -290,8 +283,10 @@ export async function saveSettingsAction(formData: FormData) {
   await logAdminAudit("settings_updated", user.email ?? null, parsed);
 
   revalidatePath("/admin/settings");
+  revalidatePath("/admin/imports");
   revalidatePath("/admin/results");
   revalidatePath("/");
+  revalidatePath("/vote");
 }
 
 export async function simulateVotingStateAction(formData: FormData) {
@@ -307,26 +302,30 @@ export async function simulateVotingStateAction(formData: FormData) {
   let values: {
     voting_start_at: string | null;
     voting_end_at: string | null;
-    results_revealed_at: string | null;
+    voting_opened_at: string | null;
+    voting_closed_at: string | null;
   };
 
   if (parsed.state === "before") {
     values = {
       voting_start_at: toLocalDateTimeValue(new Date(now.getTime() + hour)),
       voting_end_at: toLocalDateTimeValue(new Date(now.getTime() + 2 * day)),
-      results_revealed_at: null
+      voting_opened_at: null,
+      voting_closed_at: null
     };
   } else if (parsed.state === "live") {
     values = {
       voting_start_at: toLocalDateTimeValue(new Date(now.getTime() - hour)),
       voting_end_at: toLocalDateTimeValue(new Date(now.getTime() + hour)),
-      results_revealed_at: null
+      voting_opened_at: new Date().toISOString(),
+      voting_closed_at: null
     };
   } else {
     values = {
       voting_start_at: toLocalDateTimeValue(new Date(now.getTime() - 2 * day)),
       voting_end_at: toLocalDateTimeValue(new Date(now.getTime() - hour)),
-      results_revealed_at: null
+      voting_opened_at: null,
+      voting_closed_at: null
     };
   }
 
@@ -386,6 +385,8 @@ export async function resetEventDataAction() {
     await upsertSettings({
       voting_start_at: null,
       voting_end_at: null,
+      voting_opened_at: null,
+      voting_closed_at: null,
       results_revealed_at: null
     });
   } catch (error) {
@@ -413,11 +414,61 @@ export async function resetEventDataAction() {
   redirect("/admin/settings?success=reset-all");
 }
 
+export async function closeVotingNowAction() {
+  const user = await requireAdminUser();
+  const settings = await getAppSettings();
+  const lifecycle = getVotingLifecycle(settings);
+
+  if (!lifecycle.isLive) {
+    redirect("/admin/results?error=not-live");
+  }
+
+  const votingClosedAt = new Date().toISOString();
+  await upsertSettings({ voting_closed_at: votingClosedAt });
+  await logAdminAudit("voting_closed_manually", user.email ?? null, {
+    votingClosedAt
+  });
+
+  revalidatePath("/");
+  revalidatePath("/vote");
+  revalidatePath("/admin/imports");
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/results");
+  redirect("/admin/results?success=voting-closed");
+}
+
+export async function startVotingNowAction() {
+  const user = await requireAdminUser();
+  const settings = await getAppSettings();
+  const lifecycle = getVotingLifecycle(settings);
+
+  if (lifecycle.phase !== "before") {
+    redirect("/admin/results?error=not-before");
+  }
+
+  const votingOpenedAt = new Date().toISOString();
+  await upsertSettings({
+    voting_opened_at: votingOpenedAt,
+    voting_closed_at: null
+  });
+  await logAdminAudit("voting_opened_manually", user.email ?? null, {
+    votingOpenedAt
+  });
+
+  revalidatePath("/");
+  revalidatePath("/vote");
+  revalidatePath("/admin/imports");
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/results");
+  redirect("/admin/results?success=voting-opened");
+}
+
 export async function publishResultsAction() {
   const user = await requireAdminUser();
   const settings = await getAppSettings();
+  const lifecycle = getVotingLifecycle(settings);
 
-  if (settings.voting_end_at && new Date(settings.voting_end_at).getTime() > Date.now()) {
+  if (!lifecycle.isClosed) {
     redirect("/admin/results?error=too-early");
   }
 
@@ -425,6 +476,7 @@ export async function publishResultsAction() {
   await logAdminAudit("results_published", user.email ?? null, {
     votingEndAt: settings.voting_end_at
   });
+  revalidatePath("/");
   revalidatePath("/results");
   revalidatePath("/admin/results");
 }
@@ -466,8 +518,8 @@ export async function startVotingAction(formData: FormData) {
     }
   }
 
-  const now = Date.now();
-  if (settings.voting_start_at && new Date(settings.voting_start_at).getTime() > now) {
+  const lifecycle = getVotingLifecycle(settings);
+  if (lifecycle.phase === "before") {
     await logVoteAttempt({
       action: "voter_start_blocked_not_started",
       ipHash,
@@ -475,7 +527,7 @@ export async function startVotingAction(formData: FormData) {
     });
     redirect("/?error=not-started");
   }
-  if (settings.voting_end_at && new Date(settings.voting_end_at).getTime() < now) {
+  if (lifecycle.phase === "closed") {
       await logVoteAttempt({
         action: "voter_start_blocked_ended",
         ipHash,
@@ -559,8 +611,8 @@ export async function submitVoteAction(formData: FormData) {
   const supabase = createSupabaseAdminClient();
   const ipHash = await getIpHash();
 
-  const now = Date.now();
-  if (settings.voting_start_at && new Date(settings.voting_start_at).getTime() > now) {
+  const lifecycle = getVotingLifecycle(settings);
+  if (lifecycle.phase === "before") {
     await logVoteAttempt({
       action: "vote_blocked_not_started",
       voterId: voter.id,
@@ -569,7 +621,7 @@ export async function submitVoteAction(formData: FormData) {
     });
     redirectVoteError(categoryId, "not-started");
   }
-  if (settings.voting_end_at && new Date(settings.voting_end_at).getTime() < now) {
+  if (lifecycle.phase === "closed") {
     await logVoteAttempt({
       action: "vote_blocked_ended",
       voterId: voter.id,

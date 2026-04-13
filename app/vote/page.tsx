@@ -8,7 +8,7 @@ import { resetVotingSessionAction } from "@/app/actions";
 export const dynamic = "force-dynamic";
 
 export default async function VoteHomePage() {
-  const { categories, settings, voter, votingState } = await getVotingHomeData();
+  const { categories, settings, voter, votingState, published } = await getVotingHomeData();
 
   if (!voter) {
     return (
@@ -62,7 +62,9 @@ export default async function VoteHomePage() {
           <div className="mt-6 rounded-2xl border border-[color:var(--border)] bg-white/70 p-5 text-sm text-[color:var(--muted)]">
             {votingState === "before"
               ? "Voting has not opened yet. Come back when the voting window begins."
-              : "Voting is closed. Results will appear after they are published."}
+              : published
+                ? "Voting is closed. Results are now published."
+                : "Voting is closed. Results will appear after they are published."}
           </div>
         )}
       </div>

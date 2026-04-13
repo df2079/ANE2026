@@ -19,7 +19,7 @@ export default async function LandingPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const { settings, voter, votingState } = await getVotingHomeData();
+  const { settings, voter, votingState, published } = await getVotingHomeData();
   const { error } = await searchParams;
 
   if (voter) {
@@ -71,7 +71,7 @@ export default async function LandingPage({
             <div className="rounded-2xl border border-[color:var(--border)] bg-white/70 p-5">
               <h2 className="text-lg font-semibold">Voting has closed</h2>
               <p className="mt-3 text-sm text-[color:var(--muted)]">
-                {settings.results_revealed_at
+                {published
                   ? "Results are now published."
                   : "Results will appear here once they are published."}
               </p>
@@ -116,7 +116,7 @@ export default async function LandingPage({
             </form>
           ) : null}
 
-          {settings.results_revealed_at ? (
+          {published ? (
             <Link href="/results" className="btn-secondary w-full text-center">
               View published results
             </Link>

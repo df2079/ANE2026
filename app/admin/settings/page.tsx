@@ -1,4 +1,4 @@
-import { resetEventDataAction, saveSettingsAction, simulateVotingStateAction } from "@/app/actions";
+import { resetEventDataAction, saveSettingsAction } from "@/app/actions";
 import { AdminShell } from "@/components/admin-shell";
 import { SubmitButton } from "@/components/submit-button";
 import { requireAdminUser } from "@/lib/auth";
@@ -24,15 +24,7 @@ export default async function AdminSettingsPage({
       <div className="space-y-4">
         {success ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">
-            {success === "testing-before"
-              ? "Voting state set to not started for testing."
-              : success === "testing-live"
-                ? "Voting state set to live for testing."
-                : success === "testing-ended"
-                  ? "Voting state set to ended for testing."
-                  : success === "reset-all"
-                    ? "All event data was reset for testing."
-                  : "Settings updated."}
+            {success === "reset-all" ? "All event data was reset for testing." : "Settings updated."}
           </div>
         ) : null}
         {error === "reset-failed" ? (
@@ -73,27 +65,6 @@ export default async function AdminSettingsPage({
             <SubmitButton pendingLabel="Saving settings...">Save settings</SubmitButton>
           </div>
         </form>
-
-        <div className="panel p-5">
-          <h2 className="text-xl font-semibold">Temporary testing controls</h2>
-          <p className="mt-1.5 text-sm font-medium text-[color:var(--muted)]">
-            These buttons update the voting dates directly so you can quickly simulate each state.
-          </p>
-          <div className="mt-3.5 grid gap-3 sm:grid-cols-3">
-            <form action={simulateVotingStateAction}>
-              <input type="hidden" name="state" value="before" />
-              <SubmitButton pendingLabel="Updating...">Simulate voting not started</SubmitButton>
-            </form>
-            <form action={simulateVotingStateAction}>
-              <input type="hidden" name="state" value="live" />
-              <SubmitButton pendingLabel="Updating...">Simulate voting live</SubmitButton>
-            </form>
-            <form action={simulateVotingStateAction}>
-              <input type="hidden" name="state" value="ended" />
-              <SubmitButton pendingLabel="Updating...">Simulate voting ended</SubmitButton>
-            </form>
-          </div>
-        </div>
 
         <div className="panel p-5">
           <h2 className="text-xl font-semibold">Temporary destructive reset</h2>

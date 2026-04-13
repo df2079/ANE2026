@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import crypto from "node:crypto";
 import { DEVICE_COOKIE, VOTER_COOKIE } from "@/lib/constants";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { getAppSettings } from "@/lib/settings";
+import { getAppSettings, getVotingLifecycle } from "@/lib/settings";
 
 function unwrapSingle<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
@@ -148,40 +148,28 @@ export async function getImportsWithWarnings() {
 export async function getResultsData() {
   const supabase = createSupabaseAdminClient();
   const settings = await getAppSettings();
-  const ended = settings.voting_end_at ? new Date(settings.voting_end_at).getTime() <= Date.now() : false;
-  const revealed = Boolean(settings.results_revealed_at);
+  const lifecycle = getVotingLifecycle(settings);
 
-  if (!ended || !revealed) {
-    const { data: auditLogs } = await supabase
-      .from("admin_audit_logs")
-      .select("*")
-      .in("action", ["results_published", "workbook_synced"])
-      .order("created_at", { ascending: false })
-      .limit(10);
+  if (!lifecycle.published) {
     return {
       canView: false,
-      ended,
-      published: revealed,
+      phase: lifecycle.phase,
+      isLive: lifecycle.isLive,
+      canPublish: lifecycle.canPublish,
+      published: lifecycle.published,
       categories: [],
-      auditLogs: auditLogs ?? [],
       revealedAt: settings.results_revealed_at
     };
   }
   const grouped = await getResultCategoriesWithCounts();
 
-  const { data: auditLogs } = await supabase
-    .from("admin_audit_logs")
-    .select("*")
-    .in("action", ["results_published", "workbook_synced", "settings_updated"])
-    .order("created_at", { ascending: false })
-    .limit(10);
-
   return {
     canView: true,
-    ended,
-    published: revealed,
+    phase: lifecycle.phase,
+    isLive: lifecycle.isLive,
+    canPublish: lifecycle.canPublish,
+    published: lifecycle.published,
     categories: grouped,
-    auditLogs: auditLogs ?? [],
     revealedAt: settings.results_revealed_at
   };
 }
@@ -190,15 +178,7 @@ export async function getVotingHomeData() {
   const supabase = createSupabaseAdminClient();
   const settings = await getAppSettings();
   const voter = await getCurrentVoter();
-  const now = Date.now();
-  const startsAtMs = settings.voting_start_at ? new Date(settings.voting_start_at).getTime() : null;
-  const endsAtMs = settings.voting_end_at ? new Date(settings.voting_end_at).getTime() : null;
-  const votingState =
-    startsAtMs && now < startsAtMs
-      ? "before"
-      : endsAtMs && now > endsAtMs
-        ? "after"
-        : "open";
+  const lifecycle = getVotingLifecycle(settings);
 
   const [{ data: categories, error: categoryError }, { data: nomineesData, error: nomineesError }] =
     await Promise.all([
@@ -255,7 +235,8 @@ export async function getVotingHomeData() {
   return {
     settings,
     voter,
-    votingState,
+    votingState: lifecycle.phase,
+    published: lifecycle.published,
     categories: categories.map((category) => ({
       id: category.id,
       name: category.name,

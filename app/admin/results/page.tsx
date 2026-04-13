@@ -1,7 +1,7 @@
 import { AdminShell } from "@/components/admin-shell";
 import { requireAdminUser } from "@/lib/auth";
 import { getResultsData } from "@/lib/data";
-import { publishResultsAction } from "@/app/actions";
+import { closeVotingNowAction, publishResultsAction, startVotingNowAction } from "@/app/actions";
 import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +9,11 @@ export const dynamic = "force-dynamic";
 export default async function AdminResultsPage({
   searchParams
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; success?: string }>;
 }) {
   await requireAdminUser();
   const results = await getResultsData();
-  const { error } = await searchParams;
+  const { error, success } = await searchParams;
 
   return (
     <AdminShell
@@ -21,24 +21,64 @@ export default async function AdminResultsPage({
       title="Results"
       description="Publish results after voting closes. Once published, the public results page becomes visible."
     >
+      {success === "voting-opened" ? (
+        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          Voting was opened manually and is now live.
+        </div>
+      ) : null}
+      {success === "voting-closed" ? (
+        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          Voting was closed manually. Results can now be published when you are ready.
+        </div>
+      ) : null}
       {!results.canView ? (
         <div className="panel p-5">
           <h2 className="text-xl font-semibold">Results are still locked</h2>
           {error === "too-early" ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Results can only be published after voting has ended.
+              Results can only be published after voting is closed.
+            </div>
+          ) : null}
+          {error === "not-live" ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Voting can only be closed manually while it is currently live.
+            </div>
+          ) : null}
+          {error === "not-before" ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Voting can only be started manually before the scheduled window begins.
             </div>
           ) : null}
           <p className="mt-3 text-sm text-[color:var(--muted)]">
-            {results.ended
-              ? "Voting has ended. An admin can now publish the final results."
-              : "Rankings stay hidden until voting ends and an admin intentionally publishes them."}
+            {results.phase === "before"
+              ? "Voting has not started yet. You can wait for the scheduled start time or open voting early."
+              : results.phase === "open"
+                ? "Voting is currently live. You can close voting early if needed, then publish the final results."
+                : "Voting is closed. An admin can now publish the final results."}
           </p>
-          <form action={publishResultsAction} className="mt-5">
-            <button type="submit" className="btn-primary disabled:cursor-not-allowed disabled:opacity-60" disabled={!results.ended}>
-              Publish results when eligible
-            </button>
-          </form>
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+            {results.phase === "before" ? (
+              <form action={startVotingNowAction}>
+                <button type="submit" className="btn-secondary">
+                  Start voting now
+                </button>
+              </form>
+            ) : null}
+            {results.isLive ? (
+              <form action={closeVotingNowAction}>
+                <button type="submit" className="btn-secondary">
+                  Close voting now
+                </button>
+              </form>
+            ) : null}
+            {results.canPublish ? (
+              <form action={publishResultsAction}>
+                <button type="submit" className="btn-primary">
+                  Publish results
+                </button>
+              </form>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
