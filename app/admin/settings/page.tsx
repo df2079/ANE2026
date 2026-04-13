@@ -3,6 +3,7 @@ import { AdminShell } from "@/components/admin-shell";
 import { SubmitButton } from "@/components/submit-button";
 import { requireAdminUser } from "@/lib/auth";
 import { getAppSettings } from "@/lib/settings";
+import { formatDateTimeInputValue } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function AdminSettingsPage({
                 <input
                   type="datetime-local"
                   name="voting_start_at"
-                  defaultValue={settings.voting_start_at?.slice(0, 16) ?? ""}
+                  defaultValue={formatDateTimeInputValue(settings.voting_start_at)}
                   className="field"
                 />
               </div>
@@ -54,7 +55,7 @@ export default async function AdminSettingsPage({
                 <input
                   type="datetime-local"
                   name="voting_end_at"
-                  defaultValue={settings.voting_end_at?.slice(0, 16) ?? ""}
+                  defaultValue={formatDateTimeInputValue(settings.voting_end_at)}
                   className="field"
                 />
               </div>

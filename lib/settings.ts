@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { parseAppDateTime } from "@/lib/utils";
 
 export type AppSettings = {
   voting_start_at: string | null;
@@ -63,10 +64,10 @@ export async function upsertSettings(values: Partial<AppSettings>) {
 
 export function getVotingLifecycle(settings: AppSettings, now = new Date()): VotingLifecycle {
   const nowMs = now.getTime();
-  const startsAtMs = settings.voting_start_at ? new Date(settings.voting_start_at).getTime() : null;
-  const endsAtMs = settings.voting_end_at ? new Date(settings.voting_end_at).getTime() : null;
-  const openedAtMs = settings.voting_opened_at ? new Date(settings.voting_opened_at).getTime() : null;
-  const closedAtMs = settings.voting_closed_at ? new Date(settings.voting_closed_at).getTime() : null;
+  const startsAtMs = parseAppDateTime(settings.voting_start_at)?.getTime() ?? null;
+  const endsAtMs = parseAppDateTime(settings.voting_end_at)?.getTime() ?? null;
+  const openedAtMs = parseAppDateTime(settings.voting_opened_at)?.getTime() ?? null;
+  const closedAtMs = parseAppDateTime(settings.voting_closed_at)?.getTime() ?? null;
 
   const beforeStart = openedAtMs === null && startsAtMs !== null && nowMs < startsAtMs;
   const afterEnd = endsAtMs !== null && nowMs > endsAtMs;

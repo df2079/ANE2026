@@ -8,7 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import type { Json } from "@/lib/types";
-import { normalizeEmail, normalizeWhitespace, slugify } from "@/lib/utils";
+import { normalizeEmail, normalizeWhitespace, slugify, toStoredDateTime } from "@/lib/utils";
 import { getIpHash } from "@/lib/ip";
 import { syncWorkbookImport } from "@/lib/importer";
 import { getAppSettings, getVotingLifecycle, upsertSettings } from "@/lib/settings";
@@ -258,16 +258,6 @@ const testingVotingStateSchema = z.object({
   state: z.enum(["before", "live", "ended"])
 });
 
-function toLocalDateTimeValue(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate())
-  ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export async function saveSettingsAction(formData: FormData) {
   const user = await requireAdminUser();
 
@@ -277,8 +267,8 @@ export async function saveSettingsAction(formData: FormData) {
   });
 
   await upsertSettings({
-    voting_start_at: parsed.voting_start_at,
-    voting_end_at: parsed.voting_end_at
+    voting_start_at: toStoredDateTime(parsed.voting_start_at),
+    voting_end_at: toStoredDateTime(parsed.voting_end_at)
   });
   await logAdminAudit("settings_updated", user.email ?? null, parsed);
 
@@ -308,22 +298,22 @@ export async function simulateVotingStateAction(formData: FormData) {
 
   if (parsed.state === "before") {
     values = {
-      voting_start_at: toLocalDateTimeValue(new Date(now.getTime() + hour)),
-      voting_end_at: toLocalDateTimeValue(new Date(now.getTime() + 2 * day)),
+      voting_start_at: new Date(now.getTime() + hour).toISOString(),
+      voting_end_at: new Date(now.getTime() + 2 * day).toISOString(),
       voting_opened_at: null,
       voting_closed_at: null
     };
   } else if (parsed.state === "live") {
     values = {
-      voting_start_at: toLocalDateTimeValue(new Date(now.getTime() - hour)),
-      voting_end_at: toLocalDateTimeValue(new Date(now.getTime() + hour)),
+      voting_start_at: new Date(now.getTime() - hour).toISOString(),
+      voting_end_at: new Date(now.getTime() + hour).toISOString(),
       voting_opened_at: new Date().toISOString(),
       voting_closed_at: null
     };
   } else {
     values = {
-      voting_start_at: toLocalDateTimeValue(new Date(now.getTime() - 2 * day)),
-      voting_end_at: toLocalDateTimeValue(new Date(now.getTime() - hour)),
+      voting_start_at: new Date(now.getTime() - 2 * day).toISOString(),
+      voting_end_at: new Date(now.getTime() - hour).toISOString(),
       voting_opened_at: null,
       voting_closed_at: null
     };
