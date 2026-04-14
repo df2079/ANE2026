@@ -37,7 +37,7 @@ export default async function CategoryVotePage({
   }
 
   const supabase = createSupabaseAdminClient();
-  const [{ data: category }, { data: existingVoteRaw }] = await Promise.all([
+  const [{ data: category }, { data: existingVoteRaw, error: existingVoteError }] = await Promise.all([
     supabase.from("categories").select("*").eq("id", categoryId).eq("is_active", true).maybeSingle(),
     supabase
       .from("votes")
@@ -48,25 +48,35 @@ export default async function CategoryVotePage({
       .eq("category_id", categoryId)
       .maybeSingle()
   ]);
+
+  if (existingVoteError) {
+    throw existingVoteError;
+  }
+
   const existingVote = existingVoteRaw as ExistingVoteRow | null;
 
   if (!category) {
     notFound();
   }
 
-  const { data: nomineesData, error: nomineesError } = await supabase
-    .from("category_nominees")
-    .select(
-      "brand_id, perfume_id, brands:brand_id(display_name), perfumes:perfume_id(display_name, brands:brand_id(display_name))"
-    )
-    .eq("category_id", categoryId)
-    .order("sort_label");
+  const nomineesResult = !existingVote
+    ? await supabase
+        .from("category_nominees")
+        .select(
+          "brand_id, perfume_id, brands:brand_id(display_name), perfumes:perfume_id(display_name, brands:brand_id(display_name))"
+        )
+        .eq("category_id", categoryId)
+        .order("sort_label")
+    : { data: [], error: null };
+
+  const nominees = nomineesResult.data ?? [];
+  const nomineesError = nomineesResult.error;
 
   if (nomineesError) {
     throw nomineesError;
   }
 
-  const nominees = (nomineesData ?? []) as unknown as Array<{
+  const nomineeRows = (nominees as unknown as Array<{
     brand_id: string | null;
     perfume_id: string | null;
     brands: { display_name: string } | { display_name: string }[] | null;
@@ -74,9 +84,7 @@ export default async function CategoryVotePage({
       | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })
       | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })[]
       | null;
-  }>;
-
-  const nomineeRows = nominees.map((nominee) => {
+  }>).map((nominee) => {
     const brand = unwrapSingle(nominee.brands);
     const perfume = unwrapSingle(nominee.perfumes);
     const perfumeBrand = perfume ? unwrapSingle(perfume.brands) : null;
@@ -103,7 +111,7 @@ export default async function CategoryVotePage({
   return (
     <PublicPageShell>
       <div className="panel p-6">
-        <Link href="/vote" className="eyebrow">
+        <Link href="/vote" prefetch className="eyebrow">
           Back to categories
         </Link>
         <h1 className="mt-3 text-2xl font-semibold">{category.name}</h1>

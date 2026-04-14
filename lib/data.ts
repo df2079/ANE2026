@@ -180,24 +180,32 @@ export async function getVotingHomeData() {
   const voter = await getCurrentVoter();
   const lifecycle = getVotingLifecycle(settings);
 
-  const [{ data: categories, error: categoryError }, { data: nomineesData, error: nomineesError }] =
-    await Promise.all([
-      supabase.from("categories").select("id, name, sort_order").eq("is_active", true).order("sort_order"),
-      supabase.from("category_nominees").select("category_id")
-    ]);
+  const { data: categories, error: categoryError } = await supabase
+    .from("categories")
+    .select("id, name, sort_order")
+    .eq("is_active", true)
+    .order("sort_order");
 
   if (categoryError) {
     throw categoryError;
   }
-  if (nomineesError) {
-    throw nomineesError;
-  }
 
-  const nominees = (nomineesData ?? []) as Array<{ category_id: string }>;
-  const nomineeCounts = nominees.reduce(
-    (map, nominee) => map.set(nominee.category_id, (map.get(nominee.category_id) ?? 0) + 1),
-    new Map<string, number>()
+  const nomineeCountEntries = await Promise.all(
+    (categories ?? []).map(async (category) => {
+      const { count, error } = await supabase
+        .from("category_nominees")
+        .select("*", { count: "exact", head: true })
+        .eq("category_id", category.id);
+
+      if (error) {
+        throw error;
+      }
+
+      return [category.id, count ?? 0] as const;
+    })
   );
+
+  const nomineeCounts = new Map<string, number>(nomineeCountEntries);
 
   const votedCategoryIds = new Set<string>();
   const votedLabelsByCategoryId = new Map<string, string>();

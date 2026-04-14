@@ -15,7 +15,7 @@ export function CategoryCard({
   votedLabel: string | null;
 }) {
   return (
-    <Link href={`/vote/${id}`} className="panel block p-5 transition hover:-translate-y-0.5">
+    <Link href={`/vote/${id}`} prefetch className="panel block p-5 transition hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="eyebrow mb-2">Category</p>

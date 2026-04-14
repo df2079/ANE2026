@@ -45,6 +45,7 @@ export function AdminShell({
           <Link
             key={item.href}
             href={item.href}
+            prefetch
             className={cn(
               "rounded-full border px-4 py-2 text-sm font-medium whitespace-nowrap",
               currentPath === item.href
