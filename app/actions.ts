@@ -550,13 +550,24 @@ export async function saveTieBreakResolutionAction(formData: FormData) {
   }
 
   const nextTieBreakVoteCount = chosenNominee.tieBreakVotes + 1;
-  const { error } = await supabase.from("category_tie_breaks").upsert({
-    category_id,
-    nominee_key: chosenNominee.nomineeKey,
-    nominee_brand_id: chosenNominee.nomineeBrandId,
-    nominee_perfume_id: chosenNominee.nomineePerfumeId,
-    priority: nextTieBreakVoteCount
-  }, {
+  const tieBreakRow =
+    chosenNominee.nomineePerfumeId !== null
+      ? {
+          category_id,
+          nominee_key: chosenNominee.nomineeKey,
+          nominee_brand_id: null,
+          nominee_perfume_id: chosenNominee.nomineePerfumeId,
+          priority: nextTieBreakVoteCount
+        }
+      : {
+          category_id,
+          nominee_key: chosenNominee.nomineeKey,
+          nominee_brand_id: chosenNominee.nomineeBrandId,
+          nominee_perfume_id: null,
+          priority: nextTieBreakVoteCount
+        };
+
+  const { error } = await supabase.from("category_tie_breaks").upsert(tieBreakRow, {
     onConflict: "category_id,nominee_key"
   });
 
