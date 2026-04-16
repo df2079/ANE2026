@@ -35,9 +35,6 @@ export default async function LandingPage({
             <Link href="/results" className="btn-primary">
               View results
             </Link>
-            <Link href="/admin/login" className="btn-secondary">
-              Admin
-            </Link>
           </div>
         </div>
       </PublicPageShell>
@@ -56,9 +53,6 @@ export default async function LandingPage({
           <div className="mt-6 flex gap-3">
             <Link href="/vote" className="btn-primary">
               Continue voting
-            </Link>
-            <Link href="/admin/login" className="btn-secondary">
-              Admin
             </Link>
           </div>
         </div>

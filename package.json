@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test:votes": "node scripts/generate-test-votes.mjs",
     "demo:workbook": "node scripts/generate-demo-workbook.mjs",
     "env:validate": "node scripts/validate-env.mjs",
     "supabase:local:start": "npx supabase start",

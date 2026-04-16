@@ -154,8 +154,12 @@ export async function getResultsData() {
     return {
       canView: false,
       phase: lifecycle.phase,
+      adminState: lifecycle.adminState,
       isLive: lifecycle.isLive,
+      canStart: lifecycle.canStart,
+      canEnd: lifecycle.canEnd,
       canPublish: lifecycle.canPublish,
+      canUnpublish: lifecycle.canUnpublish,
       published: lifecycle.published,
       categories: [],
       revealedAt: settings.results_revealed_at
@@ -166,8 +170,12 @@ export async function getResultsData() {
   return {
     canView: true,
     phase: lifecycle.phase,
+    adminState: lifecycle.adminState,
     isLive: lifecycle.isLive,
+    canStart: lifecycle.canStart,
+    canEnd: lifecycle.canEnd,
     canPublish: lifecycle.canPublish,
+    canUnpublish: lifecycle.canUnpublish,
     published: lifecycle.published,
     categories: grouped,
     revealedAt: settings.results_revealed_at

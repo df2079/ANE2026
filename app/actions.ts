@@ -432,8 +432,8 @@ export async function startVotingNowAction() {
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
 
-  if (lifecycle.phase !== "before") {
-    redirect("/admin/results?error=not-before");
+  if (!lifecycle.canStart) {
+    redirect(`/admin/results?error=${lifecycle.published ? "published" : "not-startable"}`);
   }
 
   const votingOpenedAt = new Date().toISOString();
@@ -468,7 +468,29 @@ export async function publishResultsAction() {
   });
   revalidatePath("/");
   revalidatePath("/results");
+  revalidatePath("/vote");
   revalidatePath("/admin/results");
+}
+
+export async function unpublishResultsAction() {
+  const user = await requireAdminUser();
+  const settings = await getAppSettings();
+  const lifecycle = getVotingLifecycle(settings);
+
+  if (!lifecycle.canUnpublish) {
+    redirect("/admin/results?error=not-published");
+  }
+
+  await upsertSettings({ results_revealed_at: null });
+  await logAdminAudit("results_unpublished", user.email ?? null, {
+    previouslyRevealedAt: settings.results_revealed_at
+  });
+
+  revalidatePath("/");
+  revalidatePath("/results");
+  revalidatePath("/vote");
+  revalidatePath("/admin/results");
+  redirect("/admin/results?success=results-unpublished");
 }
 
 export async function startVotingAction(formData: FormData) {
