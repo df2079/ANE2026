@@ -34,7 +34,7 @@ type RankedResultCategory = {
   rows: RankedResultRow[];
   reviewRows: DisplayResultRow[];
   finalists: DisplayResultRow[];
-  unresolvedTieResolution: RankedTieGroup | null;
+  unresolvedTieResolutions: RankedTieGroup[];
 };
 
 export type ResultsCategory = RankedResultCategory;
@@ -144,11 +144,8 @@ export async function getRankedResultCategories() {
       return row;
     })();
     let currentIndex = 0;
-    let unresolvedTieResolution: RankedTieGroup | null = null;
-    let resolvedTieSlot: RankedTieGroup | null = null;
-    let resolvedNomineeKey: string | null = null;
-
-    // Find the single podium-affecting slot that matters for this category.
+    const resolvedNomineeKeyByRank = new Map<number, string>();
+    const unresolvedTieResolutions: RankedTieGroup[] = [];
     for (const voteCount of sortedVoteCounts) {
       const group = (groupedByVotes.get(voteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label));
       const startRank = currentIndex + 1;
@@ -160,52 +157,46 @@ export async function getRankedResultCategories() {
             : null;
 
         if (selectedNominee) {
-          resolvedTieSlot = {
-            startRank,
-            voteCount,
-            nominees: group
-          };
-          resolvedNomineeKey = selectedNominee.nomineeKey;
+          resolvedNomineeKeyByRank.set(startRank, selectedNominee.nomineeKey);
         } else {
-          unresolvedTieResolution = {
+          unresolvedTieResolutions.push({
             startRank,
             voteCount,
             nominees: group
-          };
+          });
         }
-        break;
       }
 
       currentIndex += group.length;
     }
 
     const rows: RankedResultRow[] = [];
+    currentIndex = 0;
     for (const voteCount of sortedVoteCounts) {
       const group = (groupedByVotes.get(voteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label));
+      const startRank = currentIndex + 1;
+      const resolvedNomineeKey = resolvedNomineeKeyByRank.get(startRank) ?? null;
 
       if (
-        resolvedTieSlot &&
         resolvedNomineeKey &&
-        resolvedTieSlot.voteCount === voteCount &&
-        resolvedTieSlot.nominees.length === group.length &&
-        resolvedTieSlot.nominees.every((nominee, index) => nominee.nomineeKey === group[index]?.nomineeKey)
+        group.length > 1 &&
+        currentIndex < 3
       ) {
         const selectedNominee = group.find((row) => row.nomineeKey === resolvedNomineeKey) ?? null;
         if (selectedNominee) {
           rows.push(selectedNominee, ...group.filter((row) => row.nomineeKey !== resolvedNomineeKey));
+          currentIndex += group.length;
           continue;
         }
       }
 
       rows.push(...group);
+      currentIndex += group.length;
     }
 
     const reviewRows = rows.map((row, index) => {
       const rank = index + 1;
-      const resolvedByAdmin =
-        Boolean(resolvedTieSlot) &&
-        resolvedTieSlot?.startRank === rank &&
-        resolvedNomineeKey === row.nomineeKey;
+      const resolvedByAdmin = resolvedNomineeKeyByRank.get(rank) === row.nomineeKey;
 
       return {
         ...row,
@@ -221,7 +212,7 @@ export async function getRankedResultCategories() {
       rows,
       reviewRows,
       finalists: reviewRows.slice(0, 3),
-      unresolvedTieResolution
+      unresolvedTieResolutions
     } satisfies RankedResultCategory;
   });
 }
@@ -298,7 +289,7 @@ export async function getResultsData() {
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
   const rankedCategories = lifecycle.phase === "closed" || lifecycle.published ? await getRankedResultCategories() : [];
-  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedTieResolution !== null);
+  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedTieResolutions.length > 0);
 
   if (!lifecycle.published) {
     return {

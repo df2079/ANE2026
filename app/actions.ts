@@ -501,14 +501,46 @@ export async function unpublishResultsAction() {
 }
 
 const tieResolutionSchema = z.object({
-  category_ids: z.array(z.string().min(1)).min(1),
+  slot_keys: z.array(z.string().min(1)).min(1),
+  allowed_nominees: z.record(z.string().min(1), z.array(z.string().min(1)).min(2)),
   selections: z.record(z.string().min(1), z.string().min(1))
 });
 
+function parseNomineeKey(nomineeKey: string) {
+  if (nomineeKey.startsWith("perfume:")) {
+    return {
+      nominee_key: nomineeKey,
+      nominee_brand_id: null,
+      nominee_perfume_id: nomineeKey.replace("perfume:", "")
+    };
+  }
+
+  if (nomineeKey.startsWith("brand:")) {
+    return {
+      nominee_key: nomineeKey,
+      nominee_brand_id: nomineeKey.replace("brand:", ""),
+      nominee_perfume_id: null
+    };
+  }
+
+  throw new Error("Invalid nominee key");
+}
+
 export async function saveTieBreakResolutionAction(formData: FormData) {
-  const user = await requireAdminUser();
   const parsed = tieResolutionSchema.safeParse({
-    category_ids: formData.getAll("category_ids"),
+    slot_keys: formData.getAll("slot_keys"),
+    allowed_nominees: Object.fromEntries(
+      Array.from(formData.entries())
+        .filter(([key]) => key.startsWith("allowed:"))
+        .reduce((accumulator, [key, value]) => {
+          const slotKey = key.replace("allowed:", "");
+          const current = accumulator.get(slotKey) ?? [];
+          current.push(String(value));
+          accumulator.set(slotKey, current);
+          return accumulator;
+        }, new Map<string, string[]>())
+        .entries()
+    ),
     selections: Object.fromEntries(
       Array.from(formData.entries())
         .filter(([key]) => key.startsWith("selection:"))
@@ -520,73 +552,54 @@ export async function saveTieBreakResolutionAction(formData: FormData) {
     redirect("/admin/results?error=tie-resolution-missing");
   }
 
-  const { category_ids, selections } = parsed.data;
+  const { slot_keys, allowed_nominees, selections } = parsed.data;
 
-  const results = await getResultsData();
-  const categoriesToResolve = results.categories.filter((category) => category.unresolvedTieResolution !== null);
-  const visibleCategoryIds = categoriesToResolve.map((category) => category.id);
+  const slotPayloads = slot_keys.map((slotKey) => {
+    const [categoryId, startRankText] = slotKey.split(":");
+    const startRank = Number(startRankText);
+    const chosenNomineeKey = selections[slotKey];
 
-  if (
-    category_ids.length !== visibleCategoryIds.length ||
-    category_ids.some((categoryId) => !visibleCategoryIds.includes(categoryId))
-  ) {
-    redirect("/admin/results?error=tie-resolution-stale");
-  }
-
-  const resolvedRows = categoriesToResolve.map((category) => {
-    const tieGroup = category.unresolvedTieResolution;
-    if (!tieGroup) {
+    if (!categoryId || !Number.isInteger(startRank) || startRank < 1 || startRank > 3) {
       redirect("/admin/results?error=tie-resolution-stale");
     }
 
-    const chosenNomineeKey = selections[category.id];
     if (!chosenNomineeKey) {
       redirect("/admin/results?error=tie-resolution-missing");
     }
 
-    const chosenNominee = tieGroup.nominees.find((nominee) => nominee.nomineeKey === chosenNomineeKey);
-    if (!chosenNominee) {
+    const allowedNominees = allowed_nominees[slotKey];
+    if (!allowedNominees || !allowedNominees.includes(chosenNomineeKey)) {
       redirect("/admin/results?error=tie-resolution-invalid");
     }
 
-    return chosenNominee.nomineePerfumeId !== null
-      ? {
-          category_id: category.id,
-          nominee_key: chosenNominee.nomineeKey,
-          nominee_brand_id: null,
-          nominee_perfume_id: chosenNominee.nomineePerfumeId,
-          priority: tieGroup.startRank
-        }
-      : {
-          category_id: category.id,
-          nominee_key: chosenNominee.nomineeKey,
-          nominee_brand_id: chosenNominee.nomineeBrandId,
-          nominee_perfume_id: null,
-          priority: tieGroup.startRank
-        };
+    let nomineeValues: ReturnType<typeof parseNomineeKey>;
+    try {
+      nomineeValues = parseNomineeKey(chosenNomineeKey);
+    } catch {
+      redirect("/admin/results?error=tie-resolution-invalid");
+    }
+
+    return {
+      category_id: categoryId,
+      priority: startRank,
+      ...nomineeValues
+    };
   });
 
+  const categoryIds = Array.from(new Set(slotPayloads.map((row) => row.category_id)));
+
   const supabase = createSupabaseAdminClient();
-  const { error: deleteError } = await supabase.from("category_tie_breaks").delete().in("category_id", visibleCategoryIds);
+  const { error: deleteError } = await supabase.from("category_tie_breaks").delete().in("category_id", categoryIds);
   if (deleteError) {
     redirect("/admin/results?error=tie-resolution-save-failed");
   }
 
-  const { error } = await supabase.from("category_tie_breaks").insert(resolvedRows);
+  const { error } = await supabase.from("category_tie_breaks").insert(slotPayloads);
   if (error) {
     redirect("/admin/results?error=tie-resolution-save-failed");
   }
 
-  await logAdminAudit("results_tie_break_resolved", user.email ?? null, {
-    categories: resolvedRows.map((row) => ({
-      categoryId: row.category_id,
-      nomineeKey: row.nominee_key,
-      priority: row.priority
-    }))
-  });
-
   revalidatePath("/admin/results");
-  revalidatePath("/results");
   redirect("/admin/results?success=tie-resolution-complete");
 }
 

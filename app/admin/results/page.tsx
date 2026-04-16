@@ -128,7 +128,7 @@ export default async function AdminResultsPage({
         ) : null}
         {error === "tie-resolution-invalid" ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            One of the selected nominees was not valid for the current tied slot. Please choose again.
+            One of the selected nominees was not valid for the current tied slot. Please refresh and choose again.
           </div>
         ) : null}
         {error === "tie-resolution-missing" ? (
@@ -195,42 +195,48 @@ export default async function AdminResultsPage({
           </div>
 
           {results.categories
-            .filter((category) => category.unresolvedTieResolution !== null)
+            .filter((category) => category.unresolvedTieResolutions.length > 0)
             .map((category) => {
-              const tieGroup = category.unresolvedTieResolution;
-              if (!tieGroup) {
-                return null;
-              }
-
               return (
                 <div key={category.id} className="panel p-5">
-                  <input type="hidden" name="category_ids" value={category.id} />
                   <h2 className="text-xl font-semibold">{category.name}</h2>
-                  <p className="mt-2 text-sm font-medium text-[color:var(--foreground)]">
-                    Tie for {ordinalLabel(tieGroup.startRank)} place
-                  </p>
-                  <p className="mt-1 text-sm text-[color:var(--muted)]">
-                    These nominees are tied on {tieGroup.voteCount} votes. Choose who gets this place.
-                  </p>
-                  <div className="mt-4 space-y-3">
-                    {tieGroup.nominees.map((nominee, index) => (
-                      <label
-                        key={nominee.nomineeKey}
-                        className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[color:var(--border)] bg-white/80 px-4 py-3"
-                      >
-                        <input
-                          type="radio"
-                          name={`selection:${category.id}`}
-                          value={nominee.nomineeKey}
-                          required={index === 0}
-                          className="mt-1"
-                        />
-                        <span className="block">
-                          <span className="block font-medium text-[color:var(--foreground)]">{nominee.label}</span>
-                          <span className="block text-sm text-[color:var(--muted)]">{nominee.votes} votes</span>
-                        </span>
-                      </label>
-                    ))}
+                  <div className="mt-4 space-y-6">
+                    {category.unresolvedTieResolutions.map((tieGroup) => {
+                      const slotKey = `${category.id}:${tieGroup.startRank}`;
+
+                      return (
+                        <div key={slotKey}>
+                          <input type="hidden" name="slot_keys" value={slotKey} />
+                          <p className="text-sm font-medium text-[color:var(--foreground)]">
+                            Resolve {ordinalLabel(tieGroup.startRank)} place
+                          </p>
+                          <p className="mt-1 text-sm text-[color:var(--muted)]">
+                            These nominees are tied on {tieGroup.voteCount} votes. Choose who gets this place.
+                          </p>
+                          <div className="mt-3 space-y-3">
+                            {tieGroup.nominees.map((nominee, index) => (
+                              <label
+                                key={`${slotKey}-${nominee.nomineeKey}`}
+                                className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[color:var(--border)] bg-white/80 px-4 py-3"
+                              >
+                                <input type="hidden" name={`allowed:${slotKey}`} value={nominee.nomineeKey} />
+                                <input
+                                  type="radio"
+                                  name={`selection:${slotKey}`}
+                                  value={nominee.nomineeKey}
+                                  required={index === 0}
+                                  className="mt-1"
+                                />
+                                <span className="block">
+                                  <span className="block font-medium text-[color:var(--foreground)]">{nominee.label}</span>
+                                  <span className="block text-sm text-[color:var(--muted)]">{nominee.votes} votes</span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -244,14 +250,11 @@ export default async function AdminResultsPage({
         </form>
       ) : results.canView ? (
         <div className="space-y-4">
-          <div className="panel p-5">
-            <h2 className="text-xl font-semibold">{results.published ? "Published results" : "Full ranking preview"}</h2>
-            <p className="mt-2 text-sm text-[color:var(--muted)]">
-              {results.published
-                ? `Published ${results.revealedAt ? formatDateTime(results.revealedAt) : "after voting ended"}.`
-                : "Admin sees the full ranking here. The public page shows only the top 3 finalists in the same order."}
-            </p>
-          </div>
+          {results.published && results.revealedAt ? (
+            <div className="panel p-5">
+              <p className="text-sm text-[color:var(--muted)]">Published {formatDateTime(results.revealedAt)}.</p>
+            </div>
+          ) : null}
 
           {results.categories.map((category) => (
             <div key={category.id} className="panel p-5">
