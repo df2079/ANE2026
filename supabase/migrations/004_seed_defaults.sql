@@ -8,10 +8,10 @@ set value = excluded.value;
 
 insert into public.categories (id, name, nominee_type, sort_order, is_active)
 values
-  ('best-romanian-perfume', 'Best Romanian Perfume from Art Niche Expo 2026', 'perfume', 1, true),
-  ('best-brand-launched', 'Best brand launched at Art Niche Expo 2026', 'brand', 2, true),
-  ('best-perfume-launched', 'Best perfume launched at Art Niche Expo 2026', 'perfume', 3, true),
-  ('best-perfume-overall', 'Best perfume from Art Niche Expo 2026', 'perfume', 4, true)
+  ('best-romanian-perfume', 'Best perfume by a Romanian brand', 'perfume', 1, true),
+  ('best-brand-launched', 'Best new brand at Art Niche Expo 2026', 'brand', 2, true),
+  ('best-perfume-launched', 'Best new perfume of 2026', 'perfume', 3, true),
+  ('best-perfume-overall', 'Best perfume at Art Niche Expo 2026', 'perfume', 4, true)
 on conflict (id) do update
 set name = excluded.name,
     nominee_type = excluded.nominee_type,

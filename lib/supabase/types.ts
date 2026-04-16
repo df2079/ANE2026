@@ -180,6 +180,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      category_tie_breaks: {
+        Row: {
+          category_id: string;
+          created_at: string;
+          id: string;
+          nominee_brand_id: string | null;
+          nominee_key: string;
+          nominee_perfume_id: string | null;
+          priority: number;
+          updated_at: string;
+        };
+        Insert: {
+          category_id: string;
+          created_at?: string;
+          id?: string;
+          nominee_brand_id?: string | null;
+          nominee_key: string;
+          nominee_perfume_id?: string | null;
+          priority: number;
+          updated_at?: string;
+        };
+        Update: {
+          category_id?: string;
+          created_at?: string;
+          id?: string;
+          nominee_brand_id?: string | null;
+          nominee_key?: string;
+          nominee_perfume_id?: string | null;
+          priority?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       import_logs: {
         Row: {
           created_at: string;

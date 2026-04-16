@@ -64,8 +64,8 @@ export default async function LandingPage({
     <PublicPageShell>
       <div className="panel overflow-hidden">
         <div className="border-b border-[color:var(--border)] px-6 py-5">
-          <p className="eyebrow mb-2">Art Niche Expo Awards 2026</p>
-          <h1 className="text-3xl font-semibold">Vote for the fragrances that stayed with you</h1>
+          <p className="eyebrow mb-2">Welcome to</p>
+          <h1 className="text-3xl font-semibold">Art Niche Expo Awards 2026</h1>
         </div>
 
         <div className="space-y-6 px-6 py-6">

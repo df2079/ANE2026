@@ -8,7 +8,37 @@ function unwrapSingle<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-async function getResultCategoriesWithCounts() {
+type RankedResultRow = {
+  nomineeKey: string;
+  nomineeBrandId: string | null;
+  nomineePerfumeId: string | null;
+  label: string;
+  votes: number;
+  tieBreakPriority: number | null;
+};
+
+type RankedTieGroup = {
+  voteCount: number;
+  nominees: RankedResultRow[];
+  isResolved: boolean;
+};
+
+type RankedResultCategory = {
+  id: string;
+  name: string;
+  rows: RankedResultRow[];
+  unresolvedPodiumTieGroups: RankedTieGroup[];
+};
+
+export type ResultsCategory = RankedResultCategory;
+export type ResultsTieGroup = RankedTieGroup;
+export type ResultsRow = RankedResultRow;
+
+function getNomineeKey(row: { nominee_brand_id: string | null; nominee_perfume_id: string | null }) {
+  return row.nominee_perfume_id ? `perfume:${row.nominee_perfume_id}` : `brand:${row.nominee_brand_id ?? "unknown"}`;
+}
+
+export async function getRankedResultCategories() {
   const supabase = createSupabaseAdminClient();
 
   const { data: categories, error: categoriesError } = await supabase
@@ -31,6 +61,14 @@ async function getResultCategoriesWithCounts() {
     throw votesError;
   }
 
+  const { data: tieBreaksData, error: tieBreaksError } = await supabase
+    .from("category_tie_breaks")
+    .select("category_id, nominee_key, priority");
+
+  if (tieBreaksError) {
+    throw tieBreaksError;
+  }
+
   const votes = (votesData ?? []) as unknown as Array<{
     category_id: string;
     nominee_brand_id: string | null;
@@ -42,8 +80,15 @@ async function getResultCategoriesWithCounts() {
       | null;
   }>;
 
+  const tieBreakPriorityByCategory = new Map<string, Map<string, number>>();
+  for (const row of tieBreaksData ?? []) {
+    const categoryMap = tieBreakPriorityByCategory.get(row.category_id) ?? new Map<string, number>();
+    categoryMap.set(row.nominee_key, row.priority);
+    tieBreakPriorityByCategory.set(row.category_id, categoryMap);
+  }
+
   return categories.map((category) => {
-    const counts = new Map<string, { label: string; votes: number }>();
+    const counts = new Map<string, RankedResultRow>();
 
     votes
       .filter((vote) => vote.category_id === category.id)
@@ -51,7 +96,7 @@ async function getResultCategoriesWithCounts() {
         const perfume = unwrapSingle(vote.perfumes);
         const brand = unwrapSingle(vote.brands);
         const nestedBrand = perfume ? unwrapSingle(perfume.brands) : null;
-        const key = vote.nominee_perfume_id ?? vote.nominee_brand_id ?? "unknown";
+        const key = getNomineeKey(vote);
         const label =
           perfume && nestedBrand
             ? `${nestedBrand.display_name} - ${perfume.display_name}`
@@ -59,21 +104,60 @@ async function getResultCategoriesWithCounts() {
 
         const current = counts.get(key);
         counts.set(key, {
+          nomineeKey: key,
+          nomineeBrandId: vote.nominee_brand_id,
+          nomineePerfumeId: vote.nominee_perfume_id,
           label,
-          votes: (current?.votes ?? 0) + 1
+          votes: (current?.votes ?? 0) + 1,
+          tieBreakPriority: tieBreakPriorityByCategory.get(category.id)?.get(key) ?? null
         });
       });
+
+    const groupedByVotes = new Map<number, RankedResultRow[]>();
+    for (const row of counts.values()) {
+      const group = groupedByVotes.get(row.votes) ?? [];
+      group.push(row);
+      groupedByVotes.set(row.votes, group);
+    }
+
+    const sortedVoteCounts = Array.from(groupedByVotes.keys()).sort((a, b) => b - a);
+    const rows: RankedResultRow[] = [];
+    const unresolvedPodiumTieGroups: RankedTieGroup[] = [];
+    let currentIndex = 0;
+
+    for (const voteCount of sortedVoteCounts) {
+      const group = groupedByVotes.get(voteCount) ?? [];
+      const priorities = group
+        .map((row) => row.tieBreakPriority)
+        .filter((value): value is number => value !== null);
+      const uniquePriorities = new Set(priorities);
+      const isResolved = group.length <= 1 || (priorities.length === group.length && uniquePriorities.size === group.length);
+
+      const sortedGroup = [...group].sort((a, b) => {
+        if (a.tieBreakPriority !== null && b.tieBreakPriority !== null && a.tieBreakPriority !== b.tieBreakPriority) {
+          return a.tieBreakPriority - b.tieBreakPriority;
+        }
+        return a.label.localeCompare(b.label);
+      });
+
+      if (group.length > 1 && currentIndex < 3 && !isResolved) {
+        unresolvedPodiumTieGroups.push({
+          voteCount,
+          nominees: sortedGroup,
+          isResolved
+        });
+      }
+
+      rows.push(...sortedGroup);
+      currentIndex += sortedGroup.length;
+    }
 
     return {
       id: category.id,
       name: category.name,
-      rows: Array.from(counts.values()).sort((a, b) => {
-        if (b.votes !== a.votes) {
-          return b.votes - a.votes;
-        }
-        return a.label.localeCompare(b.label);
-      })
-    };
+      rows,
+      unresolvedPodiumTieGroups
+    } satisfies RankedResultCategory;
   });
 }
 
@@ -146,26 +230,27 @@ export async function getImportsWithWarnings() {
 }
 
 export async function getResultsData() {
-  const supabase = createSupabaseAdminClient();
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
+  const rankedCategories = lifecycle.phase === "closed" || lifecycle.published ? await getRankedResultCategories() : [];
+  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedPodiumTieGroups.length > 0);
 
   if (!lifecycle.published) {
     return {
-      canView: false,
+      canView: lifecycle.phase === "closed",
       phase: lifecycle.phase,
       adminState: lifecycle.adminState,
       isLive: lifecycle.isLive,
       canStart: lifecycle.canStart,
       canEnd: lifecycle.canEnd,
-      canPublish: lifecycle.canPublish,
+      canPublish: lifecycle.canPublish && !hasUnresolvedPodiumTies,
       canUnpublish: lifecycle.canUnpublish,
+      hasUnresolvedPodiumTies,
       published: lifecycle.published,
-      categories: [],
+      categories: rankedCategories,
       revealedAt: settings.results_revealed_at
     };
   }
-  const grouped = await getResultCategoriesWithCounts();
 
   return {
     canView: true,
@@ -174,10 +259,11 @@ export async function getResultsData() {
     isLive: lifecycle.isLive,
     canStart: lifecycle.canStart,
     canEnd: lifecycle.canEnd,
-    canPublish: lifecycle.canPublish,
+    canPublish: lifecycle.canPublish && !hasUnresolvedPodiumTies,
     canUnpublish: lifecycle.canUnpublish,
+    hasUnresolvedPodiumTies,
     published: lifecycle.published,
-    categories: grouped,
+    categories: rankedCategories,
     revealedAt: settings.results_revealed_at
   };
 }
@@ -303,7 +389,7 @@ export async function getPublicResultsData() {
 
   return {
     published: true,
-    categories: (await getResultCategoriesWithCounts()).map((category) => {
+    categories: (await getRankedResultCategories()).map((category) => {
       return {
         id: category.id,
         name: category.name,

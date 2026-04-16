@@ -12,6 +12,7 @@ import { normalizeEmail, normalizeWhitespace, slugify, toStoredDateTime } from "
 import { getIpHash } from "@/lib/ip";
 import { syncWorkbookImport } from "@/lib/importer";
 import { getAppSettings, getVotingLifecycle, upsertSettings } from "@/lib/settings";
+import { getResultsData } from "@/lib/data";
 import {
   clearCurrentVoterCookie,
   createDeviceToken,
@@ -462,6 +463,11 @@ export async function publishResultsAction() {
     redirect("/admin/results?error=too-early");
   }
 
+  const results = await getResultsData();
+  if (results.hasUnresolvedPodiumTies) {
+    redirect("/admin/results?error=unresolved-ties");
+  }
+
   await upsertSettings({ results_revealed_at: new Date().toISOString() });
   await logAdminAudit("results_published", user.email ?? null, {
     votingEndAt: settings.voting_end_at
@@ -470,6 +476,7 @@ export async function publishResultsAction() {
   revalidatePath("/results");
   revalidatePath("/vote");
   revalidatePath("/admin/results");
+  redirect("/admin/results?success=results-published");
 }
 
 export async function unpublishResultsAction() {
@@ -491,6 +498,85 @@ export async function unpublishResultsAction() {
   revalidatePath("/vote");
   revalidatePath("/admin/results");
   redirect("/admin/results?success=results-unpublished");
+}
+
+const tieResolutionSchema = z.object({
+  category_id: z.string().min(1),
+  vote_count: z.coerce.number().int().nonnegative(),
+  nominee_keys: z.array(z.string().min(1)).min(2),
+  priorities: z.record(z.string().min(1), z.coerce.number().int().positive())
+});
+
+export async function saveTieBreakResolutionAction(formData: FormData) {
+  const user = await requireAdminUser();
+  const parsed = tieResolutionSchema.safeParse({
+    category_id: formData.get("category_id"),
+    vote_count: formData.get("vote_count"),
+    nominee_keys: formData.getAll("nominee_keys"),
+    priorities: Object.fromEntries(
+      Array.from(formData.entries())
+        .filter(([key]) => key.startsWith("priority:"))
+        .map(([key, value]) => [key.replace("priority:", ""), Number(value)])
+    )
+  });
+
+  if (!parsed.success) {
+    redirect("/admin/results?error=tie-resolution-invalid");
+  }
+
+  const { category_id, vote_count, nominee_keys, priorities } = parsed.data;
+  const selectedPriorities = nominee_keys.map((nomineeKey) => priorities[nomineeKey]);
+  const uniquePriorities = new Set(selectedPriorities);
+
+  if (
+    selectedPriorities.some((value) => !Number.isInteger(value) || value < 1 || value > nominee_keys.length) ||
+    uniquePriorities.size !== nominee_keys.length
+  ) {
+    redirect("/admin/results?error=tie-resolution-invalid");
+  }
+
+  const results = await getResultsData();
+  const category = results.categories.find((item) => item.id === category_id);
+  const tieGroup = category?.unresolvedPodiumTieGroups.find((group) => group.voteCount === vote_count);
+
+  if (!category || !tieGroup) {
+    redirect("/admin/results?error=tie-resolution-stale");
+  }
+
+  const validNomineeKeys = new Set(tieGroup.nominees.map((nominee) => nominee.nomineeKey));
+  if (nominee_keys.some((nomineeKey) => !validNomineeKeys.has(nomineeKey))) {
+    redirect("/admin/results?error=tie-resolution-stale");
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const rows = tieGroup.nominees.map((nominee) => ({
+    category_id,
+    nominee_key: nominee.nomineeKey,
+    nominee_brand_id: nominee.nomineeBrandId,
+    nominee_perfume_id: nominee.nomineePerfumeId,
+    priority: priorities[nominee.nomineeKey]
+  }));
+
+  const { error } = await supabase.from("category_tie_breaks").upsert(rows, {
+    onConflict: "category_id,nominee_key"
+  });
+
+  if (error) {
+    redirect("/admin/results?error=tie-resolution-save-failed");
+  }
+
+  await logAdminAudit("results_tie_break_resolved", user.email ?? null, {
+    categoryId: category_id,
+    voteCount: vote_count,
+    priorities: nominee_keys.map((nomineeKey) => ({
+      nomineeKey,
+      priority: priorities[nomineeKey]
+    }))
+  });
+
+  revalidatePath("/admin/results");
+  revalidatePath("/results");
+  redirect("/admin/results?success=tie-resolved");
 }
 
 export async function startVotingAction(formData: FormData) {
