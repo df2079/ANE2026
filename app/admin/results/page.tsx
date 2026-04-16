@@ -32,6 +32,7 @@ export default async function AdminResultsPage({
   await requireAdminUser();
   const results = await getResultsData();
   const { error, success } = await searchParams;
+  const showReviewContent = results.adminState === "closed" || results.adminState === "published";
 
   return (
     <AdminShell
@@ -169,16 +170,15 @@ export default async function AdminResultsPage({
             </form>
           ) : null}
         </div>
+
+        {results.adminState === "open" ? (
+          <p className="mt-4 text-sm text-[color:var(--muted)]">
+            Results review will appear here after voting ends.
+          </p>
+        ) : null}
       </div>
 
-      {!results.canView ? (
-        <div className="panel p-5">
-          <h2 className="text-xl font-semibold">Results are still locked</h2>
-          <p className="mt-3 text-sm text-[color:var(--muted)]">
-            Final rankings stay hidden until an admin publishes them.
-          </p>
-        </div>
-      ) : results.hasUnresolvedPodiumTies ? (
+      {!showReviewContent ? null : results.hasUnresolvedPodiumTies ? (
         <form action={saveTieBreakResolutionAction} className="space-y-4">
           <div className="panel p-5">
             <h2 className="text-xl font-semibold">Resolve tied podium places</h2>
@@ -235,7 +235,7 @@ export default async function AdminResultsPage({
             </button>
           </div>
         </form>
-      ) : (
+      ) : results.canView ? (
         <div className="space-y-4">
           <div className="panel p-5">
             <h2 className="text-xl font-semibold">{results.published ? "Published results" : "Full ranking preview"}</h2>
@@ -275,7 +275,7 @@ export default async function AdminResultsPage({
           ))}
 
         </div>
-      )}
+      ) : null}
     </AdminShell>
   );
 }

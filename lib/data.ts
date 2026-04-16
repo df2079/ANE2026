@@ -122,9 +122,6 @@ export async function getRankedResultCategories() {
     }
 
     const sortedVoteCounts = Array.from(groupedByVotes.keys()).sort((a, b) => b - a);
-    const rows: RankedResultRow[] = [];
-    let unresolvedTieResolution: RankedTieGroup | null = null;
-    let currentIndex = 0;
     const selectedTieBreak = (() => {
       const categoryTieBreakRows = tieBreakRowsByCategory.get(category.id) ?? [];
       if (categoryTieBreakRows.length !== 1) {
@@ -138,36 +135,61 @@ export async function getRankedResultCategories() {
 
       return row;
     })();
+    let currentIndex = 0;
+    let unresolvedTieResolution: RankedTieGroup | null = null;
+    let resolvedTieSlot: RankedTieGroup | null = null;
+    let resolvedNomineeKey: string | null = null;
 
+    // Find the single podium-affecting slot that matters for this category.
     for (const voteCount of sortedVoteCounts) {
-      const group = groupedByVotes.get(voteCount) ?? [];
+      const group = (groupedByVotes.get(voteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label));
       const startRank = currentIndex + 1;
-      const sortedGroup = [...group].sort((a, b) => a.label.localeCompare(b.label));
 
       if (group.length > 1 && currentIndex < 3) {
         const selectedNominee =
           selectedTieBreak?.priority === startRank
-            ? sortedGroup.find((row) => row.nomineeKey === selectedTieBreak.nomineeKey) ?? null
+            ? group.find((row) => row.nomineeKey === selectedTieBreak.nomineeKey) ?? null
             : null;
 
-        if (!selectedNominee) {
-          unresolvedTieResolution ??= {
+        if (selectedNominee) {
+          resolvedTieSlot = {
             startRank,
             voteCount,
-            nominees: sortedGroup
+            nominees: group
+          };
+          resolvedNomineeKey = selectedNominee.nomineeKey;
+        } else {
+          unresolvedTieResolution = {
+            startRank,
+            voteCount,
+            nominees: group
           };
         }
-
-        if (selectedNominee) {
-          rows.push(selectedNominee, ...sortedGroup.filter((row) => row.nomineeKey !== selectedNominee.nomineeKey));
-        } else {
-          rows.push(...sortedGroup);
-        }
-      } else {
-        rows.push(...sortedGroup);
+        break;
       }
 
-      currentIndex += sortedGroup.length;
+      currentIndex += group.length;
+    }
+
+    const rows: RankedResultRow[] = [];
+    for (const voteCount of sortedVoteCounts) {
+      const group = (groupedByVotes.get(voteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label));
+
+      if (
+        resolvedTieSlot &&
+        resolvedNomineeKey &&
+        resolvedTieSlot.voteCount === voteCount &&
+        resolvedTieSlot.nominees.length === group.length &&
+        resolvedTieSlot.nominees.every((nominee, index) => nominee.nomineeKey === group[index]?.nomineeKey)
+      ) {
+        const selectedNominee = group.find((row) => row.nomineeKey === resolvedNomineeKey) ?? null;
+        if (selectedNominee) {
+          rows.push(selectedNominee, ...group.filter((row) => row.nomineeKey !== resolvedNomineeKey));
+          continue;
+        }
+      }
+
+      rows.push(...group);
     }
 
     return {
