@@ -63,15 +63,6 @@ function isExpectedHeader(value: string, expected: "all_perfumes" | "launched_20
   return normalized === "launched 2026";
 }
 
-function isExpectedMetadataHeader(value: string, expected: "ro_brand" | "launched_brand") {
-  const normalized = normalizeForCompare(value);
-  if (expected === "ro_brand") {
-    return normalized === "ro brand";
-  }
-
-  return normalized === "launched at expo 2026";
-}
-
 function parseYesValue(value: string) {
   return normalizeForCompare(value) === "yes";
 }
@@ -100,14 +91,8 @@ function parseBrandSheet(worksheet: ExcelJS.Worksheet): ParsedBrandSheet {
   const headerMatch = findHeaderRow(worksheet);
   const headerA = getCellString(worksheet.getCell("A1").value);
   const headerB = getCellString(worksheet.getCell("B1").value);
-  const headerC = getCellString(worksheet.getCell("C1").value);
-  const headerD = getCellString(worksheet.getCell("D1").value);
-  const isRomanianBrand = isExpectedMetadataHeader(headerC, "ro_brand")
-    ? parseYesValue(getCellString(worksheet.getCell("C2").value))
-    : false;
-  const launchedAtExpo2026 = isExpectedMetadataHeader(headerD, "launched_brand")
-    ? parseYesValue(getCellString(worksheet.getCell("D2").value))
-    : false;
+  const isRomanianBrand = parseYesValue(getCellString(worksheet.getCell("C2").value));
+  const launchedAtExpo2026 = parseYesValue(getCellString(worksheet.getCell("D2").value));
 
   if (!headerMatch) {
     warnings.push(
@@ -121,24 +106,6 @@ function parseBrandSheet(worksheet: ExcelJS.Worksheet): ParsedBrandSheet {
       createWarning("info", {
         code: "MISSING_HEADERS",
         message: `Headers were detected on row ${headerMatch.rowNumber} using tolerant matching.`
-      })
-    );
-  }
-
-  if (headerC && !isExpectedMetadataHeader(headerC, "ro_brand")) {
-    warnings.push(
-      createWarning("info", {
-        code: "MISSING_HEADERS",
-        message: `Cell C1 did not match "RO Brand". Romanian-brand metadata was ignored for this sheet.`
-      })
-    );
-  }
-
-  if (headerD && !isExpectedMetadataHeader(headerD, "launched_brand")) {
-    warnings.push(
-      createWarning("info", {
-        code: "MISSING_HEADERS",
-        message: `Cell D1 did not match "Launched at Expo 2026". Brand-launch metadata was ignored for this sheet.`
       })
     );
   }
