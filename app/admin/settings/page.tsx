@@ -68,6 +68,18 @@ export default async function AdminSettingsPage({
         </form>
 
         <div className="panel p-5">
+          <h2 className="text-xl font-semibold">Voter export</h2>
+          <p className="mt-1.5 text-sm font-medium text-[color:var(--muted)]">
+            Export all voter emails together with their newsletter consent status.
+          </p>
+          <div className="mt-3.5 sm:max-w-xs">
+            <a href="/admin/settings/voters.csv" className="btn-secondary block text-center">
+              Export voter emails
+            </a>
+          </div>
+        </div>
+
+        <div className="panel p-5">
           <h2 className="text-xl font-semibold">Temporary destructive reset</h2>
           <p className="mt-1.5 text-sm font-medium text-[color:var(--muted)]">
             This clears imported event data and voting data so you can test from a clean state.

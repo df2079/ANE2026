@@ -83,17 +83,10 @@ export default async function AdminResultsPage({
       ) : (
         <div className="space-y-4">
           <div className="panel p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Published results</h2>
-                <p className="mt-2 text-sm text-[color:var(--muted)]">
-                  Published {results.revealedAt ? formatDateTime(results.revealedAt) : "after voting ended"}.
-                </p>
-              </div>
-              <a href="/admin/results/consented-emails.csv" className="btn-primary">
-                Export consented emails
-              </a>
-            </div>
+            <h2 className="text-xl font-semibold">Published results</h2>
+            <p className="mt-2 text-sm text-[color:var(--muted)]">
+              Published {results.revealedAt ? formatDateTime(results.revealedAt) : "after voting ended"}.
+            </p>
           </div>
 
           {results.categories.map((category) => (

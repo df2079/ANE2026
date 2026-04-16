@@ -22,6 +22,28 @@ export default async function LandingPage({
   const { settings, voter, votingState, published } = await getVotingHomeData();
   const { error } = await searchParams;
 
+  if (published) {
+    return (
+      <PublicPageShell>
+        <div className="panel p-6">
+          <p className="eyebrow mb-2">Results</p>
+          <h1 className="text-3xl font-semibold">Art Niche Expo Awards 2026</h1>
+          <p className="mt-3 text-sm text-[color:var(--muted)]">
+            The final results are now published and ready to view.
+          </p>
+          <div className="mt-6 flex gap-3">
+            <Link href="/results" className="btn-primary">
+              View results
+            </Link>
+            <Link href="/admin/login" className="btn-secondary">
+              Admin
+            </Link>
+          </div>
+        </div>
+      </PublicPageShell>
+    );
+  }
+
   if (voter) {
     return (
       <PublicPageShell>
@@ -69,7 +91,7 @@ export default async function LandingPage({
             </div>
           ) : (
             <div className="rounded-2xl border border-[color:var(--border)] bg-white/70 p-5">
-              <h2 className="text-lg font-semibold">Voting has closed</h2>
+              <h2 className="text-lg font-semibold">{published ? "Results are available" : "Voting has closed"}</h2>
               <p className="mt-3 text-sm text-[color:var(--muted)]">
                 {published
                   ? "Results are now published."

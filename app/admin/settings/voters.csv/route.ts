@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getNewsletterConsentExportRows } from "@/lib/data";
+import { getVoterExportRows } from "@/lib/data";
 import { env } from "@/lib/env";
 import { normalizeEmail } from "@/lib/utils";
 
@@ -20,10 +20,10 @@ export async function GET() {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 
-  const rows = await getNewsletterConsentExportRows();
+  const rows = await getVoterExportRows();
   const csv = [
-    ["email", "consented_at"],
-    ...rows.map((row) => [row.email, row.created_at])
+    ["email", "newsletter_consent"],
+    ...rows.map((row) => [row.email, row.newsletter_opt_in ? "yes" : "no"])
   ]
     .map((line) => line.map((value) => toCsvValue(String(value))).join(","))
     .join("\n");
@@ -31,7 +31,7 @@ export async function GET() {
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="art-niche-expo-consented-emails.csv"'
+      "Content-Disposition": 'attachment; filename="art-niche-expo-voters.csv"'
     }
   });
 }

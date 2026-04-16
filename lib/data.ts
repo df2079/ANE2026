@@ -270,6 +270,20 @@ export async function getNewsletterConsentExportRows() {
   return data ?? [];
 }
 
+export async function getVoterExportRows() {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("voters")
+    .select("email, newsletter_opt_in")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
 export async function getPublicResultsData() {
   const settings = await getAppSettings();
   if (!settings.results_revealed_at) {
@@ -282,11 +296,10 @@ export async function getPublicResultsData() {
   return {
     published: true,
     categories: (await getResultCategoriesWithCounts()).map((category) => {
-      const topVoteCount = category.rows[0]?.votes ?? 0;
       return {
         id: category.id,
         name: category.name,
-        winners: category.rows.filter((row) => row.votes === topVoteCount)
+        finalists: category.rows.slice(0, 3)
       };
     })
   };
