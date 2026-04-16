@@ -130,18 +130,21 @@ export async function getRankedResultCategories() {
     }
 
     const sortedVoteCounts = Array.from(groupedByVotes.keys()).sort((a, b) => b - a);
-    const selectedTieBreak = (() => {
+    const selectedTieBreakByRank = (() => {
       const categoryTieBreakRows = tieBreakRowsByCategory.get(category.id) ?? [];
-      if (categoryTieBreakRows.length !== 1) {
-        return null;
+      const map = new Map<number, string>();
+
+      for (const row of categoryTieBreakRows) {
+        if (row.priority < 1 || row.priority > 3) {
+          continue;
+        }
+
+        if (!map.has(row.priority)) {
+          map.set(row.priority, row.nomineeKey);
+        }
       }
 
-      const [row] = categoryTieBreakRows;
-      if (row.priority < 1 || row.priority > 3) {
-        return null;
-      }
-
-      return row;
+      return map;
     })();
     let currentIndex = 0;
     const resolvedNomineeKeyByRank = new Map<number, string>();
@@ -151,9 +154,10 @@ export async function getRankedResultCategories() {
       const startRank = currentIndex + 1;
 
       if (group.length > 1 && currentIndex < 3) {
+        const selectedNomineeKey = selectedTieBreakByRank.get(startRank) ?? null;
         const selectedNominee =
-          selectedTieBreak?.priority === startRank
-            ? group.find((row) => row.nomineeKey === selectedTieBreak.nomineeKey) ?? null
+          selectedNomineeKey !== null
+            ? group.find((row) => row.nomineeKey === selectedNomineeKey) ?? null
             : null;
 
         if (selectedNominee) {
