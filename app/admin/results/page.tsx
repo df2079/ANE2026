@@ -10,6 +10,18 @@ import {
 } from "@/app/actions";
 import { formatDateTime } from "@/lib/utils";
 
+function ordinalLabel(rank: number) {
+  if (rank % 100 >= 11 && rank % 100 <= 13) {
+    return `${rank}th`;
+  }
+
+  const remainder = rank % 10;
+  if (remainder === 1) return `${rank}st`;
+  if (remainder === 2) return `${rank}nd`;
+  if (remainder === 3) return `${rank}rd`;
+  return `${rank}th`;
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminResultsPage({
@@ -108,7 +120,7 @@ export default async function AdminResultsPage({
         ) : null}
         {error === "tie-resolution-invalid" ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Please assign a unique order to each tied nominee before saving.
+            Please choose one nominee from the tied group you want to advance.
           </div>
         ) : null}
         {error === "tie-resolution-stale" ? (
@@ -176,7 +188,7 @@ export default async function AdminResultsPage({
             <div className="panel p-5">
               <h2 className="text-xl font-semibold">Resolve podium ties before publishing</h2>
               <p className="mt-2 text-sm text-[color:var(--muted)]">
-                Manual tie-break order only applies inside equal-vote groups. Higher vote totals always stay ahead.
+                Choose one nominee at a time. Each choice adds one admin tie-break vote inside that tied group only. Higher regular vote totals always stay ahead.
               </p>
             </div>
           ) : null}
@@ -187,55 +199,50 @@ export default async function AdminResultsPage({
               {category.unresolvedPodiumTieGroups.length ? (
                 <div className="mt-4 space-y-4">
                   {category.unresolvedPodiumTieGroups.map((group) => (
-                    <form
-                      key={`${category.id}-${group.voteCount}`}
-                      action={saveTieBreakResolutionAction}
+                    <div
+                      key={`${category.id}-${group.voteCount}-${group.tieBreakVotes}-${group.startRank}`}
                       className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4"
                     >
-                      <input type="hidden" name="category_id" value={category.id} />
-                      <input type="hidden" name="vote_count" value={String(group.voteCount)} />
-                      {group.nominees.map((nominee) => (
-                        <input key={nominee.nomineeKey} type="hidden" name="nominee_keys" value={nominee.nomineeKey} />
-                      ))}
                       <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-900">
-                        Tie affecting the public podium
+                        Resolve tie for {ordinalLabel(group.startRank)} place
                       </h3>
                       <p className="mt-2 text-sm text-amber-900">
-                        These nominees are tied on {group.voteCount} votes. Choose the final order for this tied group.
+                        These nominees currently share this podium position with {group.voteCount} votes each.
                       </p>
                       <div className="mt-4 space-y-3">
-                        {group.nominees.map((nominee, index) => (
+                        {group.nominees.map((nominee) => (
                           <div
                             key={nominee.nomineeKey}
                             className="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                           >
                             <div>
                               <div className="font-medium text-[color:var(--foreground)]">{nominee.label}</div>
-                              <div className="text-sm text-[color:var(--muted)]">{nominee.votes} votes</div>
+                              <div className="text-sm text-[color:var(--muted)]">
+                                {nominee.votes} votes
+                                {nominee.tieBreakVotes > 0 ? ` · ${nominee.tieBreakVotes} admin tie-break vote${nominee.tieBreakVotes === 1 ? "" : "s"}` : ""}
+                              </div>
                             </div>
-                            <label className="flex items-center gap-3 text-sm font-medium text-[color:var(--foreground)]">
-                              <span>Final order</span>
-                              <select
-                                name={`priority:${nominee.nomineeKey}`}
-                                defaultValue={String(index + 1)}
-                                className="field h-11 min-w-[88px] py-0"
-                              >
-                                {group.nominees.map((_, optionIndex) => (
-                                  <option key={optionIndex + 1} value={optionIndex + 1}>
-                                    {optionIndex + 1}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            <form action={saveTieBreakResolutionAction}>
+                              <input type="hidden" name="category_id" value={category.id} />
+                              <input type="hidden" name="vote_count" value={String(group.voteCount)} />
+                              <input type="hidden" name="tie_break_votes" value={String(group.tieBreakVotes)} />
+                              <input type="hidden" name="chosen_nominee_key" value={nominee.nomineeKey} />
+                              {group.nominees.map((groupNominee) => (
+                                <input
+                                  key={groupNominee.nomineeKey}
+                                  type="hidden"
+                                  name="nominee_keys"
+                                  value={groupNominee.nomineeKey}
+                                />
+                              ))}
+                              <button type="submit" className="btn-secondary">
+                                Select winner of this tie
+                              </button>
+                            </form>
                           </div>
                         ))}
                       </div>
-                      <div className="mt-4">
-                        <button type="submit" className="btn-secondary">
-                          Save tie-break order
-                        </button>
-                      </div>
-                    </form>
+                    </div>
                   ))}
                 </div>
               ) : null}
@@ -243,12 +250,14 @@ export default async function AdminResultsPage({
                 {category.rows.length ? (
                   category.rows.map((row, index) => (
                     <div
-                      key={`${category.id}-${row.label}`}
+                        key={`${category.id}-${row.label}`}
                       className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-white/70 px-4 py-3"
                     >
                       <div className="font-medium">
                         {index + 1}. {row.label}
-                        {index > 0 && category.rows[index - 1]?.votes === row.votes ? (
+                        {index > 0 &&
+                        category.rows[index - 1]?.votes === row.votes &&
+                        category.rows[index - 1]?.tieBreakVotes === row.tieBreakVotes ? (
                           <span className="ml-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
                             Tied
                           </span>

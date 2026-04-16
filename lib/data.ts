@@ -14,13 +14,14 @@ type RankedResultRow = {
   nomineePerfumeId: string | null;
   label: string;
   votes: number;
-  tieBreakPriority: number | null;
+  tieBreakVotes: number;
 };
 
 type RankedTieGroup = {
+  startRank: number;
   voteCount: number;
+  tieBreakVotes: number;
   nominees: RankedResultRow[];
-  isResolved: boolean;
 };
 
 type RankedResultCategory = {
@@ -109,7 +110,7 @@ export async function getRankedResultCategories() {
           nomineePerfumeId: vote.nominee_perfume_id,
           label,
           votes: (current?.votes ?? 0) + 1,
-          tieBreakPriority: tieBreakPriorityByCategory.get(category.id)?.get(key) ?? null
+          tieBreakVotes: tieBreakPriorityByCategory.get(category.id)?.get(key) ?? 0
         });
       });
 
@@ -127,29 +128,32 @@ export async function getRankedResultCategories() {
 
     for (const voteCount of sortedVoteCounts) {
       const group = groupedByVotes.get(voteCount) ?? [];
-      const priorities = group
-        .map((row) => row.tieBreakPriority)
-        .filter((value): value is number => value !== null);
-      const uniquePriorities = new Set(priorities);
-      const isResolved = group.length <= 1 || (priorities.length === group.length && uniquePriorities.size === group.length);
+      const groupedByTieBreakVotes = new Map<number, RankedResultRow[]>();
 
-      const sortedGroup = [...group].sort((a, b) => {
-        if (a.tieBreakPriority !== null && b.tieBreakPriority !== null && a.tieBreakPriority !== b.tieBreakPriority) {
-          return a.tieBreakPriority - b.tieBreakPriority;
-        }
-        return a.label.localeCompare(b.label);
-      });
-
-      if (group.length > 1 && currentIndex < 3 && !isResolved) {
-        unresolvedPodiumTieGroups.push({
-          voteCount,
-          nominees: sortedGroup,
-          isResolved
-        });
+      for (const row of group) {
+        const tieGroup = groupedByTieBreakVotes.get(row.tieBreakVotes) ?? [];
+        tieGroup.push(row);
+        groupedByTieBreakVotes.set(row.tieBreakVotes, tieGroup);
       }
 
-      rows.push(...sortedGroup);
-      currentIndex += sortedGroup.length;
+      const sortedTieBreakVoteCounts = Array.from(groupedByTieBreakVotes.keys()).sort((a, b) => b - a);
+
+      for (const tieBreakVotes of sortedTieBreakVoteCounts) {
+        const tieGroup = (groupedByTieBreakVotes.get(tieBreakVotes) ?? []).sort((a, b) => a.label.localeCompare(b.label));
+        const startRank = currentIndex + 1;
+
+        if (tieGroup.length > 1 && currentIndex < 3) {
+          unresolvedPodiumTieGroups.push({
+            startRank,
+            voteCount,
+            tieBreakVotes,
+            nominees: tieGroup
+          });
+        }
+
+        rows.push(...tieGroup);
+        currentIndex += tieGroup.length;
+      }
     }
 
     return {

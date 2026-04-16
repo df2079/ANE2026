@@ -503,8 +503,9 @@ export async function unpublishResultsAction() {
 const tieResolutionSchema = z.object({
   category_id: z.string().min(1),
   vote_count: z.coerce.number().int().nonnegative(),
+  tie_break_votes: z.coerce.number().int().nonnegative(),
   nominee_keys: z.array(z.string().min(1)).min(2),
-  priorities: z.record(z.string().min(1), z.coerce.number().int().positive())
+  chosen_nominee_key: z.string().min(1)
 });
 
 export async function saveTieBreakResolutionAction(formData: FormData) {
@@ -512,32 +513,26 @@ export async function saveTieBreakResolutionAction(formData: FormData) {
   const parsed = tieResolutionSchema.safeParse({
     category_id: formData.get("category_id"),
     vote_count: formData.get("vote_count"),
+    tie_break_votes: formData.get("tie_break_votes"),
     nominee_keys: formData.getAll("nominee_keys"),
-    priorities: Object.fromEntries(
-      Array.from(formData.entries())
-        .filter(([key]) => key.startsWith("priority:"))
-        .map(([key, value]) => [key.replace("priority:", ""), Number(value)])
-    )
+    chosen_nominee_key: formData.get("chosen_nominee_key")
   });
 
   if (!parsed.success) {
     redirect("/admin/results?error=tie-resolution-invalid");
   }
 
-  const { category_id, vote_count, nominee_keys, priorities } = parsed.data;
-  const selectedPriorities = nominee_keys.map((nomineeKey) => priorities[nomineeKey]);
-  const uniquePriorities = new Set(selectedPriorities);
+  const { category_id, vote_count, tie_break_votes, nominee_keys, chosen_nominee_key } = parsed.data;
 
-  if (
-    selectedPriorities.some((value) => !Number.isInteger(value) || value < 1 || value > nominee_keys.length) ||
-    uniquePriorities.size !== nominee_keys.length
-  ) {
+  if (!nominee_keys.includes(chosen_nominee_key)) {
     redirect("/admin/results?error=tie-resolution-invalid");
   }
 
   const results = await getResultsData();
   const category = results.categories.find((item) => item.id === category_id);
-  const tieGroup = category?.unresolvedPodiumTieGroups.find((group) => group.voteCount === vote_count);
+  const tieGroup = category?.unresolvedPodiumTieGroups.find(
+    (group) => group.voteCount === vote_count && group.tieBreakVotes === tie_break_votes
+  );
 
   if (!category || !tieGroup) {
     redirect("/admin/results?error=tie-resolution-stale");
@@ -549,15 +544,19 @@ export async function saveTieBreakResolutionAction(formData: FormData) {
   }
 
   const supabase = createSupabaseAdminClient();
-  const rows = tieGroup.nominees.map((nominee) => ({
-    category_id,
-    nominee_key: nominee.nomineeKey,
-    nominee_brand_id: nominee.nomineeBrandId,
-    nominee_perfume_id: nominee.nomineePerfumeId,
-    priority: priorities[nominee.nomineeKey]
-  }));
+  const chosenNominee = tieGroup.nominees.find((nominee) => nominee.nomineeKey === chosen_nominee_key);
+  if (!chosenNominee) {
+    redirect("/admin/results?error=tie-resolution-stale");
+  }
 
-  const { error } = await supabase.from("category_tie_breaks").upsert(rows, {
+  const nextTieBreakVoteCount = chosenNominee.tieBreakVotes + 1;
+  const { error } = await supabase.from("category_tie_breaks").upsert({
+    category_id,
+    nominee_key: chosenNominee.nomineeKey,
+    nominee_brand_id: chosenNominee.nomineeBrandId,
+    nominee_perfume_id: chosenNominee.nomineePerfumeId,
+    priority: nextTieBreakVoteCount
+  }, {
     onConflict: "category_id,nominee_key"
   });
 
@@ -568,10 +567,9 @@ export async function saveTieBreakResolutionAction(formData: FormData) {
   await logAdminAudit("results_tie_break_resolved", user.email ?? null, {
     categoryId: category_id,
     voteCount: vote_count,
-    priorities: nominee_keys.map((nomineeKey) => ({
-      nomineeKey,
-      priority: priorities[nomineeKey]
-    }))
+    tieBreakVotes: tie_break_votes,
+    chosenNomineeKey: chosenNominee.nomineeKey,
+    nextTieBreakVoteCount
   });
 
   revalidatePath("/admin/results");
