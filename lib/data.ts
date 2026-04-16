@@ -14,13 +14,11 @@ type RankedResultRow = {
   nomineePerfumeId: string | null;
   label: string;
   votes: number;
-  tieBreakVotes: number;
 };
 
 type RankedTieGroup = {
   startRank: number;
   voteCount: number;
-  tieBreakVotes: number;
   nominees: RankedResultRow[];
 };
 
@@ -28,7 +26,7 @@ type RankedResultCategory = {
   id: string;
   name: string;
   rows: RankedResultRow[];
-  unresolvedPodiumTieGroups: RankedTieGroup[];
+  unresolvedTieResolution: RankedTieGroup | null;
 };
 
 export type ResultsCategory = RankedResultCategory;
@@ -81,11 +79,14 @@ export async function getRankedResultCategories() {
       | null;
   }>;
 
-  const tieBreakPriorityByCategory = new Map<string, Map<string, number>>();
+  const tieBreakRowsByCategory = new Map<string, Array<{ nomineeKey: string; priority: number }>>();
   for (const row of tieBreaksData ?? []) {
-    const categoryMap = tieBreakPriorityByCategory.get(row.category_id) ?? new Map<string, number>();
-    categoryMap.set(row.nominee_key, row.priority);
-    tieBreakPriorityByCategory.set(row.category_id, categoryMap);
+    const categoryRows = tieBreakRowsByCategory.get(row.category_id) ?? [];
+    categoryRows.push({
+      nomineeKey: row.nominee_key,
+      priority: row.priority
+    });
+    tieBreakRowsByCategory.set(row.category_id, categoryRows);
   }
 
   return categories.map((category) => {
@@ -109,8 +110,7 @@ export async function getRankedResultCategories() {
           nomineeBrandId: vote.nominee_brand_id,
           nomineePerfumeId: vote.nominee_perfume_id,
           label,
-          votes: (current?.votes ?? 0) + 1,
-          tieBreakVotes: tieBreakPriorityByCategory.get(category.id)?.get(key) ?? 0
+          votes: (current?.votes ?? 0) + 1
         });
       });
 
@@ -123,44 +123,58 @@ export async function getRankedResultCategories() {
 
     const sortedVoteCounts = Array.from(groupedByVotes.keys()).sort((a, b) => b - a);
     const rows: RankedResultRow[] = [];
-    const unresolvedPodiumTieGroups: RankedTieGroup[] = [];
+    let unresolvedTieResolution: RankedTieGroup | null = null;
     let currentIndex = 0;
+    const selectedTieBreak = (() => {
+      const categoryTieBreakRows = tieBreakRowsByCategory.get(category.id) ?? [];
+      if (categoryTieBreakRows.length !== 1) {
+        return null;
+      }
+
+      const [row] = categoryTieBreakRows;
+      if (row.priority < 1 || row.priority > 3) {
+        return null;
+      }
+
+      return row;
+    })();
 
     for (const voteCount of sortedVoteCounts) {
       const group = groupedByVotes.get(voteCount) ?? [];
-      const groupedByTieBreakVotes = new Map<number, RankedResultRow[]>();
+      const startRank = currentIndex + 1;
+      const sortedGroup = [...group].sort((a, b) => a.label.localeCompare(b.label));
 
-      for (const row of group) {
-        const tieGroup = groupedByTieBreakVotes.get(row.tieBreakVotes) ?? [];
-        tieGroup.push(row);
-        groupedByTieBreakVotes.set(row.tieBreakVotes, tieGroup);
-      }
+      if (group.length > 1 && currentIndex < 3) {
+        const selectedNominee =
+          selectedTieBreak?.priority === startRank
+            ? sortedGroup.find((row) => row.nomineeKey === selectedTieBreak.nomineeKey) ?? null
+            : null;
 
-      const sortedTieBreakVoteCounts = Array.from(groupedByTieBreakVotes.keys()).sort((a, b) => b - a);
-
-      for (const tieBreakVotes of sortedTieBreakVoteCounts) {
-        const tieGroup = (groupedByTieBreakVotes.get(tieBreakVotes) ?? []).sort((a, b) => a.label.localeCompare(b.label));
-        const startRank = currentIndex + 1;
-
-        if (tieGroup.length > 1 && currentIndex < 3) {
-          unresolvedPodiumTieGroups.push({
+        if (!selectedNominee) {
+          unresolvedTieResolution ??= {
             startRank,
             voteCount,
-            tieBreakVotes,
-            nominees: tieGroup
-          });
+            nominees: sortedGroup
+          };
         }
 
-        rows.push(...tieGroup);
-        currentIndex += tieGroup.length;
+        if (selectedNominee) {
+          rows.push(selectedNominee, ...sortedGroup.filter((row) => row.nomineeKey !== selectedNominee.nomineeKey));
+        } else {
+          rows.push(...sortedGroup);
+        }
+      } else {
+        rows.push(...sortedGroup);
       }
+
+      currentIndex += sortedGroup.length;
     }
 
     return {
       id: category.id,
       name: category.name,
       rows,
-      unresolvedPodiumTieGroups
+      unresolvedTieResolution
     } satisfies RankedResultCategory;
   });
 }
@@ -237,7 +251,7 @@ export async function getResultsData() {
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
   const rankedCategories = lifecycle.phase === "closed" || lifecycle.published ? await getRankedResultCategories() : [];
-  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedPodiumTieGroups.length > 0);
+  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedTieResolution !== null);
 
   if (!lifecycle.published) {
     return {

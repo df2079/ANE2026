@@ -59,9 +59,9 @@ export default async function AdminResultsPage({
           Results were published and are now visible on the public results page.
         </div>
       ) : null}
-      {success === "tie-resolved" ? (
+      {success === "tie-resolution-complete" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Tie-break order was saved. Publish becomes available once every podium-affecting tie is resolved.
+          Tie decisions were saved. You can now review the final results before publishing.
         </div>
       ) : null}
 
@@ -120,7 +120,12 @@ export default async function AdminResultsPage({
         ) : null}
         {error === "tie-resolution-invalid" ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Please choose one nominee from the tied group you want to advance.
+            One of the selected nominees was not valid for the current tied slot. Please choose again.
+          </div>
+        ) : null}
+        {error === "tie-resolution-missing" ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Choose one nominee for every tied category before continuing.
           </div>
         ) : null}
         {error === "tie-resolution-stale" ? (
@@ -173,6 +178,63 @@ export default async function AdminResultsPage({
             Final rankings stay hidden until an admin publishes them.
           </p>
         </div>
+      ) : results.hasUnresolvedPodiumTies ? (
+        <form action={saveTieBreakResolutionAction} className="space-y-4">
+          <div className="panel p-5">
+            <h2 className="text-xl font-semibold">Resolve tied podium places</h2>
+            <p className="mt-2 text-sm text-[color:var(--muted)]">
+              Choose who receives each disputed place. Only the tied categories are shown here. After you continue, you will return to the final review before publishing.
+            </p>
+          </div>
+
+          {results.categories
+            .filter((category) => category.unresolvedTieResolution !== null)
+            .map((category) => {
+              const tieGroup = category.unresolvedTieResolution;
+              if (!tieGroup) {
+                return null;
+              }
+
+              return (
+                <div key={category.id} className="panel p-5">
+                  <input type="hidden" name="category_ids" value={category.id} />
+                  <h2 className="text-xl font-semibold">{category.name}</h2>
+                  <p className="mt-2 text-sm font-medium text-[color:var(--foreground)]">
+                    Tie for {ordinalLabel(tieGroup.startRank)} place
+                  </p>
+                  <p className="mt-1 text-sm text-[color:var(--muted)]">
+                    These nominees are tied on {tieGroup.voteCount} votes. Choose who gets this place.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {tieGroup.nominees.map((nominee, index) => (
+                      <label
+                        key={nominee.nomineeKey}
+                        className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[color:var(--border)] bg-white/80 px-4 py-3"
+                      >
+                        <input
+                          type="radio"
+                          name={`selection:${category.id}`}
+                          value={nominee.nomineeKey}
+                          required={index === 0}
+                          className="mt-1"
+                        />
+                        <span className="block">
+                          <span className="block font-medium text-[color:var(--foreground)]">{nominee.label}</span>
+                          <span className="block text-sm text-[color:var(--muted)]">{nominee.votes} votes</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+          <div className="panel p-5">
+            <button type="submit" className="btn-primary">
+              Continue
+            </button>
+          </div>
+        </form>
       ) : (
         <div className="space-y-4">
           <div className="panel p-5">
@@ -184,68 +246,9 @@ export default async function AdminResultsPage({
             </p>
           </div>
 
-          {results.hasUnresolvedPodiumTies ? (
-            <div className="panel p-5">
-              <h2 className="text-xl font-semibold">Resolve podium ties before publishing</h2>
-              <p className="mt-2 text-sm text-[color:var(--muted)]">
-                Choose one nominee at a time. Each choice adds one admin tie-break vote inside that tied group only. Higher regular vote totals always stay ahead.
-              </p>
-            </div>
-          ) : null}
-
           {results.categories.map((category) => (
             <div key={category.id} className="panel p-5">
               <h2 className="text-xl font-semibold">{category.name}</h2>
-              {category.unresolvedPodiumTieGroups.length ? (
-                <div className="mt-4 space-y-4">
-                  {category.unresolvedPodiumTieGroups.map((group) => (
-                    <div
-                      key={`${category.id}-${group.voteCount}-${group.tieBreakVotes}-${group.startRank}`}
-                      className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4"
-                    >
-                      <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-900">
-                        Resolve tie for {ordinalLabel(group.startRank)} place
-                      </h3>
-                      <p className="mt-2 text-sm text-amber-900">
-                        These nominees currently share this podium position with {group.voteCount} votes each.
-                      </p>
-                      <div className="mt-4 space-y-3">
-                        {group.nominees.map((nominee) => (
-                          <div
-                            key={nominee.nomineeKey}
-                            className="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div>
-                              <div className="font-medium text-[color:var(--foreground)]">{nominee.label}</div>
-                              <div className="text-sm text-[color:var(--muted)]">
-                                {nominee.votes} votes
-                                {nominee.tieBreakVotes > 0 ? ` · ${nominee.tieBreakVotes} admin tie-break vote${nominee.tieBreakVotes === 1 ? "" : "s"}` : ""}
-                              </div>
-                            </div>
-                            <form action={saveTieBreakResolutionAction}>
-                              <input type="hidden" name="category_id" value={category.id} />
-                              <input type="hidden" name="vote_count" value={String(group.voteCount)} />
-                              <input type="hidden" name="tie_break_votes" value={String(group.tieBreakVotes)} />
-                              <input type="hidden" name="chosen_nominee_key" value={nominee.nomineeKey} />
-                              {group.nominees.map((groupNominee) => (
-                                <input
-                                  key={groupNominee.nomineeKey}
-                                  type="hidden"
-                                  name="nominee_keys"
-                                  value={groupNominee.nomineeKey}
-                                />
-                              ))}
-                              <button type="submit" className="btn-secondary">
-                                Select winner of this tie
-                              </button>
-                            </form>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
               <div className="mt-4 space-y-2">
                 {category.rows.length ? (
                   category.rows.map((row, index) => (
@@ -255,9 +258,7 @@ export default async function AdminResultsPage({
                     >
                       <div className="font-medium">
                         {index + 1}. {row.label}
-                        {index > 0 &&
-                        category.rows[index - 1]?.votes === row.votes &&
-                        category.rows[index - 1]?.tieBreakVotes === row.tieBreakVotes ? (
+                        {index > 0 && category.rows[index - 1]?.votes === row.votes ? (
                           <span className="ml-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
                             Tied
                           </span>

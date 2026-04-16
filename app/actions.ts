@@ -501,91 +501,93 @@ export async function unpublishResultsAction() {
 }
 
 const tieResolutionSchema = z.object({
-  category_id: z.string().min(1),
-  vote_count: z.coerce.number().int().nonnegative(),
-  tie_break_votes: z.coerce.number().int().nonnegative(),
-  nominee_keys: z.array(z.string().min(1)).min(2),
-  chosen_nominee_key: z.string().min(1)
+  category_ids: z.array(z.string().min(1)).min(1),
+  selections: z.record(z.string().min(1), z.string().min(1))
 });
 
 export async function saveTieBreakResolutionAction(formData: FormData) {
   const user = await requireAdminUser();
   const parsed = tieResolutionSchema.safeParse({
-    category_id: formData.get("category_id"),
-    vote_count: formData.get("vote_count"),
-    tie_break_votes: formData.get("tie_break_votes"),
-    nominee_keys: formData.getAll("nominee_keys"),
-    chosen_nominee_key: formData.get("chosen_nominee_key")
+    category_ids: formData.getAll("category_ids"),
+    selections: Object.fromEntries(
+      Array.from(formData.entries())
+        .filter(([key]) => key.startsWith("selection:"))
+        .map(([key, value]) => [key.replace("selection:", ""), String(value)])
+    )
   });
 
   if (!parsed.success) {
-    redirect("/admin/results?error=tie-resolution-invalid");
+    redirect("/admin/results?error=tie-resolution-missing");
   }
 
-  const { category_id, vote_count, tie_break_votes, nominee_keys, chosen_nominee_key } = parsed.data;
-
-  if (!nominee_keys.includes(chosen_nominee_key)) {
-    redirect("/admin/results?error=tie-resolution-invalid");
-  }
+  const { category_ids, selections } = parsed.data;
 
   const results = await getResultsData();
-  const category = results.categories.find((item) => item.id === category_id);
-  const tieGroup = category?.unresolvedPodiumTieGroups.find(
-    (group) => group.voteCount === vote_count && group.tieBreakVotes === tie_break_votes
-  );
+  const categoriesToResolve = results.categories.filter((category) => category.unresolvedTieResolution !== null);
+  const visibleCategoryIds = categoriesToResolve.map((category) => category.id);
 
-  if (!category || !tieGroup) {
+  if (
+    category_ids.length !== visibleCategoryIds.length ||
+    category_ids.some((categoryId) => !visibleCategoryIds.includes(categoryId))
+  ) {
     redirect("/admin/results?error=tie-resolution-stale");
   }
 
-  const validNomineeKeys = new Set(tieGroup.nominees.map((nominee) => nominee.nomineeKey));
-  if (nominee_keys.some((nomineeKey) => !validNomineeKeys.has(nomineeKey))) {
-    redirect("/admin/results?error=tie-resolution-stale");
-  }
+  const resolvedRows = categoriesToResolve.map((category) => {
+    const tieGroup = category.unresolvedTieResolution;
+    if (!tieGroup) {
+      redirect("/admin/results?error=tie-resolution-stale");
+    }
 
-  const supabase = createSupabaseAdminClient();
-  const chosenNominee = tieGroup.nominees.find((nominee) => nominee.nomineeKey === chosen_nominee_key);
-  if (!chosenNominee) {
-    redirect("/admin/results?error=tie-resolution-stale");
-  }
+    const chosenNomineeKey = selections[category.id];
+    if (!chosenNomineeKey) {
+      redirect("/admin/results?error=tie-resolution-missing");
+    }
 
-  const nextTieBreakVoteCount = chosenNominee.tieBreakVotes + 1;
-  const tieBreakRow =
-    chosenNominee.nomineePerfumeId !== null
+    const chosenNominee = tieGroup.nominees.find((nominee) => nominee.nomineeKey === chosenNomineeKey);
+    if (!chosenNominee) {
+      redirect("/admin/results?error=tie-resolution-invalid");
+    }
+
+    return chosenNominee.nomineePerfumeId !== null
       ? {
-          category_id,
+          category_id: category.id,
           nominee_key: chosenNominee.nomineeKey,
           nominee_brand_id: null,
           nominee_perfume_id: chosenNominee.nomineePerfumeId,
-          priority: nextTieBreakVoteCount
+          priority: tieGroup.startRank
         }
       : {
-          category_id,
+          category_id: category.id,
           nominee_key: chosenNominee.nomineeKey,
           nominee_brand_id: chosenNominee.nomineeBrandId,
           nominee_perfume_id: null,
-          priority: nextTieBreakVoteCount
+          priority: tieGroup.startRank
         };
-
-  const { error } = await supabase.from("category_tie_breaks").upsert(tieBreakRow, {
-    onConflict: "category_id,nominee_key"
   });
 
+  const supabase = createSupabaseAdminClient();
+  const { error: deleteError } = await supabase.from("category_tie_breaks").delete().in("category_id", visibleCategoryIds);
+  if (deleteError) {
+    redirect("/admin/results?error=tie-resolution-save-failed");
+  }
+
+  const { error } = await supabase.from("category_tie_breaks").insert(resolvedRows);
   if (error) {
     redirect("/admin/results?error=tie-resolution-save-failed");
   }
 
   await logAdminAudit("results_tie_break_resolved", user.email ?? null, {
-    categoryId: category_id,
-    voteCount: vote_count,
-    tieBreakVotes: tie_break_votes,
-    chosenNomineeKey: chosenNominee.nomineeKey,
-    nextTieBreakVoteCount
+    categories: resolvedRows.map((row) => ({
+      categoryId: row.category_id,
+      nomineeKey: row.nominee_key,
+      priority: row.priority
+    }))
   });
 
   revalidatePath("/admin/results");
   revalidatePath("/results");
-  redirect("/admin/results?success=tie-resolved");
+  redirect("/admin/results?success=tie-resolution-complete");
 }
 
 export async function startVotingAction(formData: FormData) {
