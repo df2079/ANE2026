@@ -45,6 +45,25 @@ function getNomineeKey(row: { nominee_brand_id: string | null; nominee_perfume_i
   return row.nominee_perfume_id ? `perfume:${row.nominee_perfume_id}` : `brand:${row.nominee_brand_id ?? "unknown"}`;
 }
 
+async function fetchAllRows<T>(fetchPage: (from: number, to: number) => Promise<T[]>) {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const page = await fetchPage(from, from + pageSize - 1);
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return rows;
+}
+
 export async function getRankedResultCategories() {
   const supabase = createSupabaseAdminClient();
 
@@ -58,15 +77,29 @@ export async function getRankedResultCategories() {
     throw categoriesError;
   }
 
-  const { data: votesData, error: votesError } = await supabase
-    .from("votes")
-    .select(
-      "category_id, nominee_brand_id, nominee_perfume_id, brands:nominee_brand_id(display_name), perfumes:nominee_perfume_id(display_name, brands:brand_id(display_name))"
-    );
+  const votes = await fetchAllRows(async (from, to) => {
+    const { data, error } = await supabase
+      .from("votes")
+      .select(
+        "category_id, nominee_brand_id, nominee_perfume_id, brands:nominee_brand_id(display_name), perfumes:nominee_perfume_id(display_name, brands:brand_id(display_name))"
+      )
+      .range(from, to);
 
-  if (votesError) {
-    throw votesError;
-  }
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []) as unknown as Array<{
+      category_id: string;
+      nominee_brand_id: string | null;
+      nominee_perfume_id: string | null;
+      brands: { display_name: string } | { display_name: string }[] | null;
+      perfumes:
+        | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })
+        | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })[]
+        | null;
+    }>;
+  });
 
   const { data: tieBreaksData, error: tieBreaksError } = await supabase
     .from("category_tie_breaks")
@@ -75,17 +108,6 @@ export async function getRankedResultCategories() {
   if (tieBreaksError) {
     throw tieBreaksError;
   }
-
-  const votes = (votesData ?? []) as unknown as Array<{
-    category_id: string;
-    nominee_brand_id: string | null;
-    nominee_perfume_id: string | null;
-    brands: { display_name: string } | { display_name: string }[] | null;
-    perfumes:
-      | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })
-      | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })[]
-      | null;
-  }>;
 
   const tieBreakRowsByCategory = new Map<string, Array<{ nomineeKey: string; priority: number }>>();
   for (const row of tieBreaksData ?? []) {
@@ -227,16 +249,23 @@ export async function getDashboardData() {
   const [
     { count: brandCount },
     { count: perfumeCount },
-    { count: voteCount },
-    { data: voteRows }
+    { count: voteCount }
   ] = await Promise.all([
     supabase.from("brands").select("*", { count: "exact", head: true }).eq("is_active", true),
     supabase.from("perfumes").select("*", { count: "exact", head: true }).eq("is_active", true),
-    supabase.from("votes").select("*", { count: "exact", head: true }),
-    supabase.from("votes").select("voter_id")
+    supabase.from("votes").select("*", { count: "exact", head: true })
   ]);
 
-  const voterCount = new Set((voteRows ?? []).map((vote) => vote.voter_id)).size;
+  const voteRows = await fetchAllRows(async (from, to) => {
+    const { data, error } = await supabase.from("votes").select("voter_id").range(from, to);
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  });
+
+  const voterCount = new Set(voteRows.map((vote) => vote.voter_id)).size;
 
   return {
     brandCount: brandCount ?? 0,

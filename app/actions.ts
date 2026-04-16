@@ -373,9 +373,10 @@ export async function resetEventDataAction() {
     await deleteAll("perfumes");
     await deleteAll("brands");
     await deleteAll("import_logs");
+    const now = new Date();
     await upsertSettings({
-      voting_start_at: null,
-      voting_end_at: null,
+      voting_start_at: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+      voting_end_at: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString(),
       voting_opened_at: null,
       voting_closed_at: null,
       results_revealed_at: null
