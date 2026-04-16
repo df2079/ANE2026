@@ -47,7 +47,7 @@ export default async function VoteHomePage() {
           </div>
           <form action={resetVotingSessionAction}>
             <button className="btn-secondary" type="submit">
-              Use another email
+              Log out
             </button>
           </form>
         </div>
