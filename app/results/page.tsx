@@ -47,7 +47,7 @@ export default async function PublicResultsPage() {
                           {index === 0 ? "st" : index === 1 ? "nd" : "rd"}
                         </div>
                       </div>
-                      <div className="mt-1 text-sm text-[color:var(--muted)]">{finalist.votes} votes</div>
+                      <div className="mt-1 text-sm text-[color:var(--muted)]">{finalist.displayVotes} votes</div>
                     </div>
                   ))}
                 </div>

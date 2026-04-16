@@ -16,6 +16,12 @@ type RankedResultRow = {
   votes: number;
 };
 
+type DisplayResultRow = RankedResultRow & {
+  rank: number;
+  displayVotes: number;
+  resolvedByAdmin: boolean;
+};
+
 type RankedTieGroup = {
   startRank: number;
   voteCount: number;
@@ -26,6 +32,8 @@ type RankedResultCategory = {
   id: string;
   name: string;
   rows: RankedResultRow[];
+  reviewRows: DisplayResultRow[];
+  finalists: DisplayResultRow[];
   unresolvedTieResolution: RankedTieGroup | null;
 };
 
@@ -192,10 +200,27 @@ export async function getRankedResultCategories() {
       rows.push(...group);
     }
 
+    const reviewRows = rows.map((row, index) => {
+      const rank = index + 1;
+      const resolvedByAdmin =
+        Boolean(resolvedTieSlot) &&
+        resolvedTieSlot?.startRank === rank &&
+        resolvedNomineeKey === row.nomineeKey;
+
+      return {
+        ...row,
+        rank,
+        displayVotes: resolvedByAdmin ? row.votes + 1 : row.votes,
+        resolvedByAdmin
+      } satisfies DisplayResultRow;
+    });
+
     return {
       id: category.id,
       name: category.name,
       rows,
+      reviewRows,
+      finalists: reviewRows.slice(0, 3),
       unresolvedTieResolution
     } satisfies RankedResultCategory;
   });
@@ -433,7 +458,7 @@ export async function getPublicResultsData() {
       return {
         id: category.id,
         name: category.name,
-        finalists: category.rows.slice(0, 3)
+        finalists: category.finalists
       };
     })
   };

@@ -1,4 +1,5 @@
 import { AdminShell } from "@/components/admin-shell";
+import { SubmitButton } from "@/components/submit-button";
 import { requireAdminUser } from "@/lib/auth";
 import { getResultsData } from "@/lib/data";
 import {
@@ -20,6 +21,12 @@ function ordinalLabel(rank: number) {
   if (remainder === 2) return `${rank}nd`;
   if (remainder === 3) return `${rank}rd`;
   return `${rank}th`;
+}
+
+function medalForRank(rank: number) {
+  if (rank === 1) return "🥇";
+  if (rank === 2) return "🥈";
+  return "🥉";
 }
 
 export const dynamic = "force-dynamic";
@@ -230,9 +237,9 @@ export default async function AdminResultsPage({
             })}
 
           <div className="panel p-5">
-            <button type="submit" className="btn-primary">
+            <SubmitButton pendingLabel="Preparing final review..." className="sm:w-auto">
               Continue
-            </button>
+            </SubmitButton>
           </div>
         </form>
       ) : results.canView ? (
@@ -249,31 +256,66 @@ export default async function AdminResultsPage({
           {results.categories.map((category) => (
             <div key={category.id} className="panel p-5">
               <h2 className="text-xl font-semibold">{category.name}</h2>
-              <div className="mt-4 space-y-2">
-                {category.rows.length ? (
-                  category.rows.map((row, index) => (
+              <div className="mt-4 grid gap-3">
+                {category.finalists.length ? (
+                  category.finalists.map((row) => (
                     <div
-                        key={`${category.id}-${row.label}`}
-                      className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-white/70 px-4 py-3"
+                      key={`${category.id}-${row.nomineeKey}`}
+                      className={`rounded-2xl px-4 py-4 ${
+                        row.rank === 1
+                          ? "border border-emerald-200 bg-emerald-50"
+                          : "border border-[color:var(--border)] bg-white/70"
+                      }`}
                     >
-                      <div className="font-medium">
-                        {index + 1}. {row.label}
-                        {index > 0 && category.rows[index - 1]?.votes === row.votes ? (
-                          <span className="ml-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                            Tied
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-medium text-[color:var(--foreground)]">
+                          <span className="mr-2" aria-hidden="true">
+                            {medalForRank(row.rank)}
                           </span>
-                        ) : null}
+                          {row.label}
+                        </div>
+                        <div className="text-sm font-medium text-[color:var(--muted)]">
+                          {ordinalLabel(row.rank)}
+                        </div>
                       </div>
-                      <div className="text-sm text-[color:var(--muted)]">{row.votes} votes</div>
+                      <div className="mt-2 text-sm text-[color:var(--muted)]">
+                        {row.displayVotes} votes
+                        {row.resolvedByAdmin ? " · Tie resolved by admin decision" : ""}
+                      </div>
                     </div>
                   ))
                 ) : (
                   <p className="text-sm text-[color:var(--muted)]">No votes recorded yet.</p>
                 )}
               </div>
+
+              {category.reviewRows.length > 3 ? (
+                <details className="mt-4 rounded-2xl border border-[color:var(--border)] bg-white/65 p-4">
+                  <summary className="cursor-pointer list-none text-sm font-semibold text-[color:var(--foreground)]">
+                    Show full ranking
+                  </summary>
+                  <div className="mt-4 space-y-2">
+                    {category.reviewRows.map((row) => (
+                      <div
+                        key={`${category.id}-full-${row.nomineeKey}`}
+                        className="flex items-center justify-between rounded-2xl border border-[color:var(--border)] bg-white/70 px-4 py-3"
+                      >
+                        <div className="font-medium">
+                          {row.rank}. {row.label}
+                          {row.resolvedByAdmin ? (
+                            <span className="ml-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
+                              Resolved
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="text-sm text-[color:var(--muted)]">{row.displayVotes} votes</div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
           ))}
-
         </div>
       ) : null}
     </AdminShell>
