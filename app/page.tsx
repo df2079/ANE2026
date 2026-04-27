@@ -94,15 +94,17 @@ export default async function LandingPage({
             </div>
           )}
 
-          <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card-strong)] p-5">
-            <h2 className="text-lg font-semibold">How it works</h2>
-            <ol className="mt-3 space-y-2 text-sm text-[color:var(--muted)]">
-              <li>1. Enter your email.</li>
-              <li>2. Open any category and choose one nominee.</li>
-              <li>3. Each category locks after submission.</li>
-              <li>4. Finish all four, or only the ones you want.</li>
-            </ol>
-          </div>
+          {votingState !== "closed" ? (
+            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card-strong)] p-5">
+              <h2 className="text-lg font-semibold">How it works</h2>
+              <ol className="mt-3 space-y-2 text-sm text-[color:var(--muted)]">
+                <li>1. Enter your email.</li>
+                <li>2. Open any category and choose one nominee.</li>
+                <li>3. Each category locks after submission.</li>
+                <li>4. Finish all four, or only the ones you want.</li>
+              </ol>
+            </div>
+          ) : null}
 
           {votingState === "open" ? (
             <form action={startVotingAction} className="space-y-4">

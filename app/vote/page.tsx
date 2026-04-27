@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { CategoryCard } from "@/components/category-card";
 import { PublicPageShell } from "@/components/public-page-shell";
 import { getVotingHomeData } from "@/lib/data";
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 
 export default async function VoteHomePage() {
   const { categories, settings, voter, votingState, published } = await getVotingHomeData();
+
+  if (published) {
+    redirect("/results");
+  }
 
   if (!voter) {
     return (

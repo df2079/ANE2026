@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { PublicPageShell } from "@/components/public-page-shell";
 import { getAppSettings } from "@/lib/settings";
 import { formatDateTime } from "@/lib/utils";
@@ -7,6 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function ThanksPage() {
   const settings = await getAppSettings();
+
+  if (settings.results_revealed_at) {
+    redirect("/results");
+  }
 
   return (
     <PublicPageShell>
