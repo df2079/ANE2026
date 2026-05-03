@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicResultsPage() {
   const results = await getPublicResultsData();
-  const medalForIndex = ["🥇", "🥈", "🥉"];
 
   return (
     <PublicPageShell>
@@ -25,32 +24,15 @@ export default async function PublicResultsPage() {
             {results.categories.map((category) => (
               <div key={category.id} className="rounded-2xl border border-[color:var(--border)] bg-white/75 p-5">
                 <h2 className="text-lg font-semibold">{category.name}</h2>
-                <div className="mt-3 space-y-2">
-                  {category.finalists.map((finalist, index) => (
-                    <div
-                      key={`${category.id}-${finalist.label}`}
-                      className={`rounded-2xl px-4 py-3 ${
-                        index === 0
-                          ? "border border-emerald-200 bg-emerald-50"
-                          : "bg-[color:var(--card-strong)]"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-medium">
-                          <span className="mr-2" aria-hidden="true">
-                            {medalForIndex[index]}
-                          </span>
-                          {finalist.label}
-                        </div>
-                        <div className="text-sm text-[color:var(--muted)]">
-                          {index + 1}
-                          {index === 0 ? "st" : index === 1 ? "nd" : "rd"}
-                        </div>
-                      </div>
-                      <div className="mt-1 text-sm text-[color:var(--muted)]">{finalist.displayVotes} votes</div>
-                    </div>
-                  ))}
-                </div>
+                {category.winner ? (
+                  <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-900">Winner</p>
+                    <div className="mt-2 font-medium text-[color:var(--foreground)]">{category.winner.label}</div>
+                    <div className="mt-1 text-sm text-[color:var(--muted)]">{category.winner.displayVotes} votes</div>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-[color:var(--muted)]">No votes recorded.</p>
+                )}
               </div>
             ))}
           </div>

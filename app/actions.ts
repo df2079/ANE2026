@@ -560,7 +560,7 @@ export async function saveTieBreakResolutionAction(formData: FormData) {
     const startRank = Number(startRankText);
     const chosenNomineeKey = selections[slotKey];
 
-    if (!categoryId || !Number.isInteger(startRank) || startRank < 1 || startRank > 3) {
+    if (!categoryId || startRank !== 1) {
       redirect("/admin/results?error=tie-resolution-stale");
     }
 

@@ -33,8 +33,8 @@ type RankedResultCategory = {
   name: string;
   rows: RankedResultRow[];
   reviewRows: DisplayResultRow[];
-  finalists: DisplayResultRow[];
-  unresolvedTieResolutions: RankedTieGroup[];
+  winner: DisplayResultRow | null;
+  unresolvedWinnerTie: RankedTieGroup | null;
 };
 
 export type ResultsCategory = RankedResultCategory;
@@ -168,61 +168,40 @@ export async function getRankedResultCategories() {
 
       return map;
     })();
-    let currentIndex = 0;
-    const resolvedNomineeKeyByRank = new Map<number, string>();
-    const unresolvedTieResolutions: RankedTieGroup[] = [];
-    for (const voteCount of sortedVoteCounts) {
-      const group = (groupedByVotes.get(voteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label));
-      const startRank = currentIndex + 1;
-
-      if (group.length > 1 && currentIndex < 3) {
-        const selectedNomineeKey = selectedTieBreakByRank.get(startRank) ?? null;
-        const selectedNominee =
-          selectedNomineeKey !== null
-            ? group.find((row) => row.nomineeKey === selectedNomineeKey) ?? null
-            : null;
-
-        if (selectedNominee) {
-          resolvedNomineeKeyByRank.set(startRank, selectedNominee.nomineeKey);
-        } else {
-          unresolvedTieResolutions.push({
-            startRank,
-            voteCount,
-            nominees: group
-          });
-        }
-      }
-
-      currentIndex += group.length;
-    }
+    const topVoteCount = sortedVoteCounts[0] ?? null;
+    const topVoteGroup =
+      topVoteCount !== null
+        ? (groupedByVotes.get(topVoteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label))
+        : [];
+    const selectedWinnerKey = selectedTieBreakByRank.get(1) ?? null;
+    const selectedWinner =
+      selectedWinnerKey !== null
+        ? topVoteGroup.find((row) => row.nomineeKey === selectedWinnerKey) ?? null
+        : null;
+    const unresolvedWinnerTie =
+      topVoteGroup.length > 1 && !selectedWinner
+        ? {
+            startRank: 1,
+            voteCount: topVoteCount ?? 0,
+            nominees: topVoteGroup
+          }
+        : null;
 
     const rows: RankedResultRow[] = [];
-    currentIndex = 0;
     for (const voteCount of sortedVoteCounts) {
       const group = (groupedByVotes.get(voteCount) ?? []).sort((a, b) => a.label.localeCompare(b.label));
-      const startRank = currentIndex + 1;
-      const resolvedNomineeKey = resolvedNomineeKeyByRank.get(startRank) ?? null;
 
-      if (
-        resolvedNomineeKey &&
-        group.length > 1 &&
-        currentIndex < 3
-      ) {
-        const selectedNominee = group.find((row) => row.nomineeKey === resolvedNomineeKey) ?? null;
-        if (selectedNominee) {
-          rows.push(selectedNominee, ...group.filter((row) => row.nomineeKey !== resolvedNomineeKey));
-          currentIndex += group.length;
-          continue;
-        }
+      if (voteCount === topVoteCount && selectedWinner) {
+        rows.push(selectedWinner, ...group.filter((row) => row.nomineeKey !== selectedWinner.nomineeKey));
+        continue;
       }
 
       rows.push(...group);
-      currentIndex += group.length;
     }
 
     const reviewRows = rows.map((row, index) => {
       const rank = index + 1;
-      const resolvedByAdmin = resolvedNomineeKeyByRank.get(rank) === row.nomineeKey;
+      const resolvedByAdmin = rank === 1 && selectedWinner?.nomineeKey === row.nomineeKey;
 
       return {
         ...row,
@@ -237,8 +216,8 @@ export async function getRankedResultCategories() {
       name: category.name,
       rows,
       reviewRows,
-      finalists: reviewRows.slice(0, 3),
-      unresolvedTieResolutions
+      winner: reviewRows[0] ?? null,
+      unresolvedWinnerTie
     } satisfies RankedResultCategory;
   });
 }
@@ -322,7 +301,7 @@ export async function getResultsData() {
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
   const rankedCategories = lifecycle.phase === "closed" || lifecycle.published ? await getRankedResultCategories() : [];
-  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedTieResolutions.length > 0);
+  const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedWinnerTie !== null);
 
   if (!lifecycle.published) {
     return {
@@ -482,7 +461,7 @@ export async function getPublicResultsData() {
       return {
         id: category.id,
         name: category.name,
-        finalists: category.finalists
+        winner: category.winner
       };
     })
   };
