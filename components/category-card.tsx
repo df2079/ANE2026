@@ -18,7 +18,6 @@ export function CategoryCard({
     <Link href={`/vote/${id}`} prefetch className="panel block p-5 transition hover:-translate-y-0.5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="eyebrow mb-2">Category</p>
           <h2 className="text-lg font-semibold">{name}</h2>
           <p className="mt-2 text-sm text-[color:var(--muted)]">{nomineeCount} nominees</p>
           {hasVoted && votedLabel ? (
@@ -38,7 +37,7 @@ export function CategoryCard({
           ) : (
             <>
               <Vote className="mr-1 h-3.5 w-3.5" />
-              Open
+              Place vote
             </>
           )}
         </span>

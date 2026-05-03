@@ -39,7 +39,10 @@ export default async function PublicResultsPage() {
                 </div>
               ) : (
                 <div className="mt-3 rounded-xl border border-[color:var(--border)] bg-white/65 px-3.5 py-3">
-                  <p className="text-sm font-semibold text-[color:var(--muted)]">Not revealed yet</p>
+                  <p className="text-sm font-semibold text-[color:var(--muted)]">Waiting for announcement</p>
+                  <p className="mt-1 text-sm text-[color:var(--muted)]">
+                    The winner will appear here once announced.
+                  </p>
                 </div>
               )}
             </div>

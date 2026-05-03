@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
 
 type NomineeRow = {
@@ -22,16 +22,19 @@ export function NomineeVoteForm({
   action: (formData: FormData) => void;
 }) {
   const [selection, setSelection] = useState("");
+  const selectedItem = useMemo(() => {
+    return items.find((item) => `${item.nomineeType}:${item.id}` === selection) ?? null;
+  }, [items, selection]);
 
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="category_id" value={categoryId} />
       <input type="hidden" name="selection" value={selection} />
-      <div className="max-h-[56vh] space-y-3 overflow-y-auto pr-1">
+      <div className="space-y-3 pb-24">
         {(groupedItems ?? [["All nominees", items]]).map(([brandName, brandItems]) => (
           <div key={brandName} className="space-y-2">
             {groupedItems ? (
-              <div className="sticky top-0 rounded-2xl bg-[color:var(--card-strong)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
+              <div className="rounded-2xl bg-[color:var(--card-strong)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
                 {brandName}
               </div>
             ) : null}
@@ -63,7 +66,19 @@ export function NomineeVoteForm({
           </div>
         ))}
       </div>
-      <SubmitButton pendingLabel="Submitting vote...">Submit vote</SubmitButton>
+      <div className="sticky bottom-3 z-20 rounded-2xl border border-[color:var(--border)] bg-[color:var(--background)]/95 p-3 shadow-[0_18px_45px_rgba(34,31,29,0.16)] backdrop-blur">
+        {selectedItem ? (
+          <p className="mb-2 text-xs font-medium text-[color:var(--muted)]">
+            Selected:{" "}
+            <span className="text-[color:var(--foreground)]">{selectedItem.perfumeName ?? selectedItem.brandName}</span>
+          </p>
+        ) : (
+          <p className="mb-2 text-xs font-medium text-[color:var(--muted)]">Choose a nominee to submit your vote.</p>
+        )}
+        <SubmitButton pendingLabel="Submitting vote..." disabled={!selection}>
+          Submit vote
+        </SubmitButton>
+      </div>
     </form>
   );
 }

@@ -58,10 +58,13 @@ export default async function VoteHomePage() {
         </div>
 
         {votingState === "open" ? (
-          <div className="mt-6 grid gap-4">
-            {categories.map((category) => (
-              <CategoryCard key={category.id} {...category} />
-            ))}
+          <div className="mt-6">
+            <p className="eyebrow mb-3">Categories</p>
+            <div className="grid gap-4">
+              {categories.map((category) => (
+                <CategoryCard key={category.id} {...category} />
+              ))}
+            </div>
           </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-[color:var(--border)] bg-white/70 p-5 text-sm text-[color:var(--muted)]">
