@@ -4,12 +4,11 @@ import { requireAdminUser } from "@/lib/auth";
 import { getResultsData } from "@/lib/data";
 import {
   closeVotingNowAction,
-  publishResultsAction,
+  hideCategoryWinnerAction,
+  revealCategoryWinnerAction,
   saveTieBreakResolutionAction,
-  startVotingNowAction,
-  unpublishResultsAction
+  startVotingNowAction
 } from "@/app/actions";
-import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -21,13 +20,13 @@ export default async function AdminResultsPage({
   await requireAdminUser();
   const results = await getResultsData();
   const { error, success } = await searchParams;
-  const showReviewContent = results.adminState === "closed" || results.adminState === "published";
+  const showReviewContent = results.canView;
 
   return (
     <AdminShell
       currentPath="/admin/results"
       title="Results"
-      description="Publish results after voting closes. Once published, the public results page becomes visible."
+      description="Review winners after voting closes, then reveal them category by category during the ceremony."
     >
       {success === "voting-opened" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
@@ -36,22 +35,22 @@ export default async function AdminResultsPage({
       ) : null}
       {success === "voting-closed" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Voting was closed manually. Results can now be published when you are ready.
+          Voting was closed manually. Winners can now be reviewed and revealed.
         </div>
       ) : null}
-      {success === "results-unpublished" ? (
+      {success === "category-revealed" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Results were unpublished. The app is now back in a closed-but-unpublished state.
+          Category winner is now visible on the public results page.
         </div>
       ) : null}
-      {success === "results-published" ? (
+      {success === "category-hidden" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Results were published and are now visible on the public results page.
+          Category winner is hidden again.
         </div>
       ) : null}
       {success === "tie-resolution-complete" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          Tie decisions were saved. You can now review the final results before publishing.
+          Tie decisions were saved. You can now review and reveal category winners.
         </div>
       ) : null}
 
@@ -63,24 +62,24 @@ export default async function AdminResultsPage({
               ? "Voting not started"
               : results.adminState === "open"
                 ? "Voting live"
-                : results.adminState === "closed"
-                  ? "Voting closed"
-                  : "Results published"}
+                : "Voting closed"}
           </div>
           <p className="mt-2 text-sm text-[color:var(--muted)]">
             {results.adminState === "before"
               ? "Voting is scheduled but has not opened yet."
               : results.adminState === "open"
                 ? "Voting is currently live."
-                : results.adminState === "closed"
-                  ? "Voting is closed. Results are not published yet."
-                  : "Results are published and voting must remain closed."}
+                : results.allWinnersRevealed
+                  ? "Voting is closed. All category winners have been announced."
+                  : results.hasAnyRevealedWinners
+                    ? "Voting is closed. Winners are being revealed category by category."
+                    : "Voting is closed. Winners can now be revealed category by category."}
           </p>
         </div>
 
         {error === "too-early" ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Results can only be published after voting is closed.
+            Winners can only be revealed after voting is closed.
           </div>
         ) : null}
         {error === "not-live" ? (
@@ -93,19 +92,19 @@ export default async function AdminResultsPage({
             Voting cannot be started from the current state.
           </div>
         ) : null}
-        {error === "published" ? (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Voting cannot be started while results are published. Unpublish results first.
-          </div>
-        ) : null}
-        {error === "not-published" ? (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Results are not currently published.
-          </div>
-        ) : null}
         {error === "unresolved-ties" ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Results cannot be published until every tie for winner has been resolved.
+            Winners cannot be revealed until every tie for winner has been resolved.
+          </div>
+        ) : null}
+        {error === "unresolved-category-tie" ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            That category winner cannot be revealed until its winner tie is resolved.
+          </div>
+        ) : null}
+        {error === "category-reveal-failed" || error === "category-hide-failed" ? (
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            The category reveal state could not be updated. Please try again.
           </div>
         ) : null}
         {error === "tie-resolution-invalid" ? (
@@ -125,7 +124,7 @@ export default async function AdminResultsPage({
         ) : null}
         {error === "tie-resolution-save-failed" ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Tie-break order could not be saved. Please try again.
+            Tie decision could not be saved. Please try again.
           </div>
         ) : null}
 
@@ -144,20 +143,6 @@ export default async function AdminResultsPage({
               </button>
             </form>
           ) : null}
-          {results.canPublish ? (
-            <form action={publishResultsAction}>
-              <button type="submit" className="btn-primary">
-                Publish results
-              </button>
-            </form>
-          ) : null}
-          {results.canUnpublish ? (
-            <form action={unpublishResultsAction}>
-              <button type="submit" className="btn-secondary">
-                Unpublish results
-              </button>
-            </form>
-          ) : null}
         </div>
 
         {results.adminState === "open" ? (
@@ -167,12 +152,12 @@ export default async function AdminResultsPage({
         ) : null}
       </div>
 
-      {!showReviewContent ? null : results.hasUnresolvedPodiumTies ? (
+      {showReviewContent && results.hasUnresolvedPodiumTies ? (
         <form action={saveTieBreakResolutionAction} className="space-y-4">
           <div className="panel p-5">
             <h2 className="text-xl font-semibold">Resolve tied winners</h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Choose the official winner for each tied category. After you continue, you will return to the final review before publishing.
+              Choose the official winner for each tied category. After you continue, you will return to the final review before revealing winners.
             </p>
           </div>
 
@@ -223,19 +208,45 @@ export default async function AdminResultsPage({
             </SubmitButton>
           </div>
         </form>
-      ) : results.canView ? (
-        <div className="space-y-4">
-          {results.published && results.revealedAt ? (
-            <div className="panel p-5">
-              <p className="text-sm text-[color:var(--muted)]">Published {formatDateTime(results.revealedAt)}.</p>
-            </div>
-          ) : null}
+      ) : null}
 
+      {showReviewContent ? (
+        <div className="space-y-4">
           {results.categories.map((category) => (
             <div key={category.id} className="panel p-5">
-              <h2 className="text-xl font-semibold">{category.name}</h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">{category.name}</h2>
+                  <p className="mt-1 text-sm text-[color:var(--muted)]">
+                    {category.revealedAt
+                      ? "Winner is visible on the public results page."
+                      : category.unresolvedWinnerTie
+                        ? "Resolve the winner tie before revealing this category."
+                        : "Winner is ready but not revealed yet."}
+                  </p>
+                </div>
+                {category.revealedAt ? (
+                  <form action={hideCategoryWinnerAction}>
+                    <input type="hidden" name="category_id" value={category.id} />
+                    <button type="submit" className="btn-secondary whitespace-nowrap">
+                      Hide winner
+                    </button>
+                  </form>
+                ) : category.winner && !category.unresolvedWinnerTie ? (
+                  <form action={revealCategoryWinnerAction}>
+                    <input type="hidden" name="category_id" value={category.id} />
+                    <button type="submit" className="btn-primary whitespace-nowrap">
+                      Reveal winner
+                    </button>
+                  </form>
+                ) : null}
+              </div>
               <div className="mt-4">
-                {category.winner ? (
+                {category.unresolvedWinnerTie ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+                    <p className="text-sm font-medium text-amber-900">Winner tie must be resolved first.</p>
+                  </div>
+                ) : category.winner ? (
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-900">Winner</p>
                     <div className="mt-2 font-medium text-[color:var(--foreground)]">{category.winner.label}</div>

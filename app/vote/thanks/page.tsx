@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PublicPageShell } from "@/components/public-page-shell";
-import { getAppSettings } from "@/lib/settings";
+import { getAppSettings, getVotingLifecycle } from "@/lib/settings";
 import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function ThanksPage() {
   const settings = await getAppSettings();
+  const lifecycle = getVotingLifecycle(settings);
 
-  if (settings.results_revealed_at) {
+  if (lifecycle.phase === "closed") {
     redirect("/results");
   }
 

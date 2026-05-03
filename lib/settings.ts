@@ -11,18 +11,15 @@ export type AppSettings = {
 };
 
 export type VotingLifecyclePhase = "before" | "open" | "closed";
-export type AdminLifecycleState = "before" | "open" | "closed" | "published";
+export type AdminLifecycleState = "before" | "open" | "closed";
 
 export type VotingLifecycle = {
   phase: VotingLifecyclePhase;
   adminState: AdminLifecycleState;
-  published: boolean;
   isLive: boolean;
   isClosed: boolean;
   canStart: boolean;
   canEnd: boolean;
-  canPublish: boolean;
-  canUnpublish: boolean;
 };
 
 export async function getAppSettings(): Promise<AppSettings> {
@@ -74,24 +71,20 @@ export function getVotingLifecycle(settings: AppSettings, now = new Date()): Vot
   const openedAtMs = parseAppDateTime(settings.voting_opened_at)?.getTime() ?? null;
   const closedAtMs = parseAppDateTime(settings.voting_closed_at)?.getTime() ?? null;
 
-  const published = Boolean(settings.results_revealed_at);
   const hasManualOpen = openedAtMs !== null && (closedAtMs === null || openedAtMs > closedAtMs);
   const beforeStart = !hasManualOpen && startsAtMs !== null && nowMs < startsAtMs;
   const afterEnd = endsAtMs !== null && nowMs > endsAtMs && (openedAtMs === null || openedAtMs <= endsAtMs);
   const manuallyClosed = closedAtMs !== null && (openedAtMs === null || closedAtMs >= openedAtMs);
 
   const phase: VotingLifecyclePhase = manuallyClosed || afterEnd ? "closed" : beforeStart ? "before" : "open";
-  const adminState: AdminLifecycleState = published ? "published" : phase;
+  const adminState: AdminLifecycleState = phase;
 
   return {
     phase,
     adminState,
-    published,
     isLive: phase === "open",
     isClosed: phase === "closed",
-    canStart: !published && phase !== "open",
-    canEnd: !published && phase === "open",
-    canPublish: phase === "closed" && !published,
-    canUnpublish: published
+    canStart: phase !== "open",
+    canEnd: phase === "open"
   };
 }

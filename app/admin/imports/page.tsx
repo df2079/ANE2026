@@ -27,7 +27,7 @@ export default async function AdminImportsPage({
           <h2 className="text-xl font-semibold">Upload XLSX</h2>
           {error === "voting-open" ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Sync is blocked while voting is live. Upload is still allowed, but nominee changes cannot be applied until voting is over or results are published.
+              Sync is blocked while voting is live. Upload is still allowed, but nominee changes cannot be applied until voting is over.
             </div>
           ) : error === "no-uploaded-workbook" ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

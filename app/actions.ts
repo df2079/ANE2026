@@ -369,6 +369,10 @@ export async function resetEventDataAction() {
     await deleteAll("vote_attempt_logs");
     await deleteAll("votes");
     await deleteAll("voters");
+    const { error: revealDeleteError } = await supabase.from("category_reveals").delete().not("category_id", "is", null);
+    if (revealDeleteError) {
+      throw revealDeleteError;
+    }
     await deleteAll("category_nominees");
     await deleteAll("perfumes");
     await deleteAll("brands");
@@ -403,6 +407,8 @@ export async function resetEventDataAction() {
   revalidatePath("/");
   revalidatePath("/results");
   revalidatePath("/vote");
+  revalidatePath("/vote/[categoryId]", "page");
+  revalidatePath("/vote/thanks");
   redirect("/admin/settings?success=reset-all");
 }
 
@@ -422,7 +428,10 @@ export async function closeVotingNowAction() {
   });
 
   revalidatePath("/");
+  revalidatePath("/results");
   revalidatePath("/vote");
+  revalidatePath("/vote/[categoryId]", "page");
+  revalidatePath("/vote/thanks");
   revalidatePath("/admin/imports");
   revalidatePath("/admin/settings");
   revalidatePath("/admin/results");
@@ -435,7 +444,7 @@ export async function startVotingNowAction() {
   const lifecycle = getVotingLifecycle(settings);
 
   if (!lifecycle.canStart) {
-    redirect(`/admin/results?error=${lifecycle.published ? "published" : "not-startable"}`);
+    redirect("/admin/results?error=not-startable");
   }
 
   const votingOpenedAt = new Date().toISOString();
@@ -448,57 +457,96 @@ export async function startVotingNowAction() {
   });
 
   revalidatePath("/");
+  revalidatePath("/results");
   revalidatePath("/vote");
+  revalidatePath("/vote/[categoryId]", "page");
+  revalidatePath("/vote/thanks");
   revalidatePath("/admin/imports");
   revalidatePath("/admin/settings");
   revalidatePath("/admin/results");
   redirect("/admin/results?success=voting-opened");
 }
 
-export async function publishResultsAction() {
+function revalidatePublicResultsSurfaces() {
+  revalidatePath("/");
+  revalidatePath("/results");
+  revalidatePath("/vote");
+  revalidatePath("/vote/[categoryId]", "page");
+  revalidatePath("/vote/thanks");
+  revalidatePath("/admin/results");
+}
+
+export async function revealCategoryWinnerAction(formData: FormData) {
   const user = await requireAdminUser();
+  const categoryId = String(formData.get("category_id") ?? "");
+
+  if (!categoryId) {
+    redirect("/admin/results?error=category-reveal-failed");
+  }
+
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
-
   if (!lifecycle.isClosed) {
     redirect("/admin/results?error=too-early");
   }
 
   const results = await getResultsData();
-  if (results.hasUnresolvedPodiumTies) {
-    redirect("/admin/results?error=unresolved-ties");
+  const category = results.categories.find((item) => item.id === categoryId);
+  if (!category || !category.winner) {
+    redirect("/admin/results?error=category-reveal-failed");
   }
 
-  await upsertSettings({ results_revealed_at: new Date().toISOString() });
-  await logAdminAudit("results_published", user.email ?? null, {
-    votingEndAt: settings.voting_end_at
+  if (category.unresolvedWinnerTie) {
+    redirect("/admin/results?error=unresolved-category-tie");
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const revealedAt = new Date().toISOString();
+  const { error } = await supabase.from("category_reveals").upsert({
+    category_id: categoryId,
+    revealed_at: revealedAt,
+    revealed_by: user.id
   });
-  revalidatePath("/");
-  revalidatePath("/results");
-  revalidatePath("/vote");
-  revalidatePath("/admin/results");
-  redirect("/admin/results?success=results-published");
+
+  if (error) {
+    redirect("/admin/results?error=category-reveal-failed");
+  }
+
+  try {
+    await logAdminAudit("category_winner_revealed", user.email ?? null, {
+      categoryId,
+      winner: category.winner.label,
+      revealedAt
+    });
+  } catch {}
+
+  revalidatePublicResultsSurfaces();
+  redirect("/admin/results?success=category-revealed");
 }
 
-export async function unpublishResultsAction() {
+export async function hideCategoryWinnerAction(formData: FormData) {
   const user = await requireAdminUser();
-  const settings = await getAppSettings();
-  const lifecycle = getVotingLifecycle(settings);
+  const categoryId = String(formData.get("category_id") ?? "");
 
-  if (!lifecycle.canUnpublish) {
-    redirect("/admin/results?error=not-published");
+  if (!categoryId) {
+    redirect("/admin/results?error=category-hide-failed");
   }
 
-  await upsertSettings({ results_revealed_at: null });
-  await logAdminAudit("results_unpublished", user.email ?? null, {
-    previouslyRevealedAt: settings.results_revealed_at
-  });
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase.from("category_reveals").delete().eq("category_id", categoryId);
 
-  revalidatePath("/");
-  revalidatePath("/results");
-  revalidatePath("/vote");
-  revalidatePath("/admin/results");
-  redirect("/admin/results?success=results-unpublished");
+  if (error) {
+    redirect("/admin/results?error=category-hide-failed");
+  }
+
+  try {
+    await logAdminAudit("category_winner_hidden", user.email ?? null, {
+      categoryId
+    });
+  } catch {}
+
+  revalidatePublicResultsSurfaces();
+  redirect("/admin/results?success=category-hidden");
 }
 
 const tieResolutionSchema = z.object({

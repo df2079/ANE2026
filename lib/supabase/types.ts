@@ -180,6 +180,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      category_reveals: {
+        Row: {
+          category_id: string;
+          created_at: string;
+          revealed_at: string;
+          revealed_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          category_id: string;
+          created_at?: string;
+          revealed_at?: string;
+          revealed_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          category_id?: string;
+          created_at?: string;
+          revealed_at?: string;
+          revealed_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       category_tie_breaks: {
         Row: {
           category_id: string;

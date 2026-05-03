@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { NomineeBrowser } from "@/components/nominee-browser";
 import { PublicPageShell } from "@/components/public-page-shell";
 import { getCurrentVoter } from "@/lib/data";
-import { getAppSettings } from "@/lib/settings";
+import { getAppSettings, getVotingLifecycle } from "@/lib/settings";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { submitVoteAction } from "@/app/actions";
 
@@ -32,8 +32,9 @@ export default async function CategoryVotePage({
   const { categoryId } = await params;
   const { error } = await searchParams;
   const settings = await getAppSettings();
+  const lifecycle = getVotingLifecycle(settings);
 
-  if (settings.results_revealed_at) {
+  if (lifecycle.phase === "closed") {
     redirect("/results");
   }
 

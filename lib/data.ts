@@ -31,6 +31,7 @@ type RankedTieGroup = {
 type RankedResultCategory = {
   id: string;
   name: string;
+  revealedAt: string | null;
   rows: RankedResultRow[];
   reviewRows: DisplayResultRow[];
   winner: DisplayResultRow | null;
@@ -117,6 +118,19 @@ export async function getRankedResultCategories() {
       priority: row.priority
     });
     tieBreakRowsByCategory.set(row.category_id, categoryRows);
+  }
+
+  const { data: revealsData, error: revealsError } = await supabase
+    .from("category_reveals")
+    .select("category_id, revealed_at");
+
+  if (revealsError) {
+    throw revealsError;
+  }
+
+  const revealedAtByCategoryId = new Map<string, string>();
+  for (const row of revealsData ?? []) {
+    revealedAtByCategoryId.set(row.category_id, row.revealed_at);
   }
 
   return categories.map((category) => {
@@ -214,6 +228,7 @@ export async function getRankedResultCategories() {
     return {
       id: category.id,
       name: category.name,
+      revealedAt: revealedAtByCategoryId.get(category.id) ?? null,
       rows,
       reviewRows,
       winner: reviewRows[0] ?? null,
@@ -300,39 +315,23 @@ export async function getImportsWithWarnings() {
 export async function getResultsData() {
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
-  const rankedCategories = lifecycle.phase === "closed" || lifecycle.published ? await getRankedResultCategories() : [];
+  const rankedCategories = lifecycle.phase === "closed" ? await getRankedResultCategories() : [];
   const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedWinnerTie !== null);
-
-  if (!lifecycle.published) {
-    return {
-      canView: lifecycle.phase === "closed",
-      phase: lifecycle.phase,
-      adminState: lifecycle.adminState,
-      isLive: lifecycle.isLive,
-      canStart: lifecycle.canStart,
-      canEnd: lifecycle.canEnd,
-      canPublish: lifecycle.canPublish && !hasUnresolvedPodiumTies,
-      canUnpublish: lifecycle.canUnpublish,
-      hasUnresolvedPodiumTies,
-      published: lifecycle.published,
-      categories: rankedCategories,
-      revealedAt: settings.results_revealed_at
-    };
-  }
+  const hasAnyRevealedWinners = rankedCategories.some((category) => category.revealedAt !== null);
+  const allWinnersRevealed = rankedCategories.length > 0 && rankedCategories.every((category) => category.revealedAt !== null);
 
   return {
-    canView: true,
+    canView: lifecycle.phase === "closed",
     phase: lifecycle.phase,
     adminState: lifecycle.adminState,
     isLive: lifecycle.isLive,
     canStart: lifecycle.canStart,
     canEnd: lifecycle.canEnd,
-    canPublish: lifecycle.canPublish && !hasUnresolvedPodiumTies,
-    canUnpublish: lifecycle.canUnpublish,
     hasUnresolvedPodiumTies,
-    published: lifecycle.published,
+    hasAnyRevealedWinners,
+    allWinnersRevealed,
     categories: rankedCategories,
-    revealedAt: settings.results_revealed_at
+    legacyRevealedAt: settings.results_revealed_at
   };
 }
 
@@ -406,7 +405,6 @@ export async function getVotingHomeData() {
     settings,
     voter,
     votingState: lifecycle.phase,
-    published: lifecycle.published,
     categories: categories.map((category) => ({
       id: category.id,
       name: category.name,
@@ -447,23 +445,20 @@ export async function getVoterExportRows() {
 }
 
 export async function getPublicResultsData() {
-  const settings = await getAppSettings();
-  if (!settings.results_revealed_at) {
+  const categories = (await getRankedResultCategories()).map((category) => {
     return {
-      published: false,
-      categories: []
+      id: category.id,
+      name: category.name,
+      winner: category.winner,
+      revealedAt: category.revealedAt,
+      isRevealed: category.revealedAt !== null
     };
-  }
+  });
 
   return {
-    published: true,
-    categories: (await getRankedResultCategories()).map((category) => {
-      return {
-        id: category.id,
-        name: category.name,
-        winner: category.winner
-      };
-    })
+    hasAnyRevealedWinners: categories.some((category) => category.isRevealed),
+    allWinnersRevealed: categories.length > 0 && categories.every((category) => category.isRevealed),
+    categories
   };
 }
 

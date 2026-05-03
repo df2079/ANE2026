@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { startVotingAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import { PublicPageShell } from "@/components/public-page-shell";
@@ -19,26 +20,11 @@ export default async function LandingPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const { settings, voter, votingState, published } = await getVotingHomeData();
+  const { settings, voter, votingState } = await getVotingHomeData();
   const { error } = await searchParams;
 
-  if (published) {
-    return (
-      <PublicPageShell>
-        <div className="panel p-6">
-          <p className="eyebrow mb-2">Results</p>
-          <h1 className="text-3xl font-semibold">Art Niche Expo Awards 2026</h1>
-          <p className="mt-3 text-sm text-[color:var(--muted)]">
-            The final results are now published and ready to view.
-          </p>
-          <div className="mt-6 flex gap-3">
-            <Link href="/results" className="btn-primary">
-              View results
-            </Link>
-          </div>
-        </div>
-      </PublicPageShell>
-    );
+  if (votingState === "closed") {
+    redirect("/results");
   }
 
   if (voter) {
@@ -83,28 +69,17 @@ export default async function LandingPage({
                 Voting closes: <span className="font-medium">{formatDateTime(settings.voting_end_at)}</span>
               </p>
             </div>
-          ) : (
-            <div className="rounded-2xl border border-[color:var(--border)] bg-white/70 p-5">
-              <h2 className="text-lg font-semibold">{published ? "Results are available" : "Voting has closed"}</h2>
-              <p className="mt-3 text-sm text-[color:var(--muted)]">
-                {published
-                  ? "Results are now published."
-                  : "Results will appear here once they are published."}
-              </p>
-            </div>
-          )}
-
-          {votingState !== "closed" ? (
-            <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card-strong)] p-5">
-              <h2 className="text-lg font-semibold">How it works</h2>
-              <ol className="mt-3 space-y-2 text-sm text-[color:var(--muted)]">
-                <li>1. Enter your email.</li>
-                <li>2. Open any category and choose one nominee.</li>
-                <li>3. Each category locks after submission.</li>
-                <li>4. Finish all four, or only the ones you want.</li>
-              </ol>
-            </div>
           ) : null}
+
+          <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card-strong)] p-5">
+            <h2 className="text-lg font-semibold">How it works</h2>
+            <ol className="mt-3 space-y-2 text-sm text-[color:var(--muted)]">
+              <li>1. Enter your email.</li>
+              <li>2. Open any category and choose one nominee.</li>
+              <li>3. Each category locks after submission.</li>
+              <li>4. Finish all four, or only the ones you want.</li>
+            </ol>
+          </div>
 
           {votingState === "open" ? (
             <form action={startVotingAction} className="space-y-4">
@@ -134,11 +109,6 @@ export default async function LandingPage({
             </form>
           ) : null}
 
-          {published ? (
-            <Link href="/results" className="btn-secondary w-full text-center">
-              View published results
-            </Link>
-          ) : null}
         </div>
       </div>
     </PublicPageShell>
