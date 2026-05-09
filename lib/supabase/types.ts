@@ -237,6 +237,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      result_adjustments: {
+        Row: {
+          brand_id: string;
+          created_at: string;
+          id: string;
+          multiplier: number;
+          reason: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          brand_id: string;
+          created_at?: string;
+          id?: string;
+          multiplier: number;
+          reason?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          brand_id?: string;
+          created_at?: string;
+          id?: string;
+          multiplier?: number;
+          reason?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       import_logs: {
         Row: {
           created_at: string;

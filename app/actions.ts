@@ -27,6 +27,12 @@ const loginSchema = z.object({
   password: z.string().min(1)
 });
 
+const resultAdjustmentSchema = z.object({
+  brandId: z.string().uuid(),
+  multiplier: z.string(),
+  reason: z.string()
+});
+
 async function logVoteAttempt(params: {
   action: string;
   voterId?: string | null;
@@ -547,6 +553,65 @@ export async function hideCategoryWinnerAction(formData: FormData) {
 
   revalidatePublicResultsSurfaces();
   redirect("/admin/results?success=category-hidden");
+}
+
+export async function saveResultAdjustmentAction(formData: FormData) {
+  const user = await requireAdminUser();
+  const parsed = resultAdjustmentSchema.safeParse({
+    brandId: formData.get("brand_id"),
+    multiplier: String(formData.get("multiplier") ?? "").trim(),
+    reason: String(formData.get("reason") ?? "").trim()
+  });
+
+  if (!parsed.success) {
+    redirect("/admin/results?error=adjustment-invalid");
+  }
+
+  const { brandId, multiplier: multiplierText, reason } = parsed.data;
+  const supabase = createSupabaseAdminClient();
+
+  if (!multiplierText) {
+    const { error } = await supabase.from("result_adjustments").delete().eq("brand_id", brandId);
+    if (error) {
+      redirect("/admin/results?error=adjustment-save-failed");
+    }
+
+    try {
+      await logAdminAudit("result_adjustment_removed", user.email ?? null, { brandId });
+    } catch {}
+
+    revalidatePublicResultsSurfaces();
+    redirect("/admin/results?success=adjustment-saved");
+  }
+
+  const multiplier = Number(multiplierText);
+  if (!Number.isFinite(multiplier) || multiplier < 0 || multiplier > 1) {
+    redirect("/admin/results?error=adjustment-invalid");
+  }
+
+  const { error } = await supabase.from("result_adjustments").upsert(
+    {
+      brand_id: brandId,
+      multiplier,
+      reason: reason || null
+    },
+    { onConflict: "brand_id" }
+  );
+
+  if (error) {
+    redirect("/admin/results?error=adjustment-save-failed");
+  }
+
+  try {
+    await logAdminAudit("result_adjustment_saved", user.email ?? null, {
+      brandId,
+      multiplier,
+      reason: reason || null
+    });
+  } catch {}
+
+  revalidatePublicResultsSurfaces();
+  redirect("/admin/results?success=adjustment-saved");
 }
 
 const tieResolutionSchema = z.object({

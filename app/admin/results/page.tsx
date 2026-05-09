@@ -6,11 +6,50 @@ import {
   closeVotingNowAction,
   hideCategoryWinnerAction,
   revealCategoryWinnerAction,
+  saveResultAdjustmentAction,
   saveTieBreakResolutionAction,
   startVotingNowAction
 } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
+
+function formatMultiplier(multiplier: number) {
+  return multiplier.toLocaleString("en-US", { maximumFractionDigits: 4 });
+}
+
+function VoteCountDetails({
+  displayVotes,
+  rawVotes,
+  multiplier,
+  resolvedByAdmin
+}: {
+  displayVotes: number;
+  rawVotes: number;
+  multiplier: number;
+  resolvedByAdmin?: boolean;
+}) {
+  const isAdjusted = multiplier !== 1;
+
+  if (!isAdjusted) {
+    return (
+      <>
+        {displayVotes} votes
+        {resolvedByAdmin ? " · Tie resolved by admin decision" : ""}
+      </>
+    );
+  }
+
+  return (
+    <>
+      Official: {displayVotes}
+      <br />
+      Raw: {rawVotes}
+      <br />
+      Adjustment: ×{formatMultiplier(multiplier)}
+      {resolvedByAdmin ? " · Tie resolved by admin decision" : ""}
+    </>
+  );
+}
 
 export default async function AdminResultsPage({
   searchParams
@@ -51,6 +90,11 @@ export default async function AdminResultsPage({
       {success === "tie-resolution-complete" ? (
         <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
           Tie decisions were saved. You can now review and reveal category winners.
+        </div>
+      ) : null}
+      {success === "adjustment-saved" ? (
+        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          Result adjustment was saved. Admin and public results have been refreshed with the current official calculation.
         </div>
       ) : null}
 
@@ -127,6 +171,16 @@ export default async function AdminResultsPage({
             Tie decision could not be saved. Please try again.
           </div>
         ) : null}
+        {error === "adjustment-invalid" ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Adjustment multiplier must be a number from 0 to 1, or blank to remove the adjustment.
+          </div>
+        ) : null}
+        {error === "adjustment-save-failed" ? (
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            Result adjustment could not be saved. Please try again.
+          </div>
+        ) : null}
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           {results.canStart ? (
@@ -150,6 +204,73 @@ export default async function AdminResultsPage({
             Results review will appear here after voting ends.
           </p>
         ) : null}
+      </div>
+
+      <div className="panel p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">Result adjustments</h2>
+            <p className="mt-2 text-sm text-[color:var(--muted)]">
+              Optional brand-level penalty multipliers. Raw votes remain unchanged.
+            </p>
+          </div>
+          {results.hasAnyRevealedWinners ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+              Some winners are already revealed. Saving an adjustment immediately refreshes public results.
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              <tr>
+                <th className="border-b border-[color:var(--border)] px-3 py-2 font-semibold">Brand</th>
+                <th className="border-b border-[color:var(--border)] px-3 py-2 font-semibold">Multiplier</th>
+                <th className="border-b border-[color:var(--border)] px-3 py-2 font-semibold">Reason</th>
+                <th className="border-b border-[color:var(--border)] px-3 py-2 font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.resultAdjustments.map((adjustment) => (
+                <tr key={adjustment.brandId}>
+                  <td className="border-b border-[color:var(--border)] px-3 py-3 font-medium">
+                    {adjustment.brandName}
+                  </td>
+                  <td className="border-b border-[color:var(--border)] px-3 py-3">
+                    <form id={`adjustment-${adjustment.brandId}`} action={saveResultAdjustmentAction}>
+                      <input type="hidden" name="brand_id" value={adjustment.brandId} />
+                      <input
+                        name="multiplier"
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        placeholder="1.0"
+                        defaultValue={adjustment.multiplier ?? ""}
+                        className="field w-28"
+                      />
+                    </form>
+                  </td>
+                  <td className="border-b border-[color:var(--border)] px-3 py-3">
+                    <input
+                      form={`adjustment-${adjustment.brandId}`}
+                      name="reason"
+                      type="text"
+                      placeholder="Optional"
+                      defaultValue={adjustment.reason ?? ""}
+                      className="field min-w-64"
+                    />
+                  </td>
+                  <td className="border-b border-[color:var(--border)] px-3 py-3">
+                    <button form={`adjustment-${adjustment.brandId}`} type="submit" className="btn-secondary px-4 py-2">
+                      Save
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showReviewContent && results.hasUnresolvedPodiumTies ? (
@@ -193,7 +314,13 @@ export default async function AdminResultsPage({
                         />
                         <span className="block">
                           <span className="block font-medium text-[color:var(--foreground)]">{nominee.label}</span>
-                          <span className="block text-sm text-[color:var(--muted)]">{nominee.votes} votes</span>
+                          <span className="block text-sm text-[color:var(--muted)]">
+                            <VoteCountDetails
+                              displayVotes={nominee.votes}
+                              rawVotes={nominee.rawVotes}
+                              multiplier={nominee.multiplier}
+                            />
+                          </span>
                         </span>
                       </label>
                     ))}
@@ -251,8 +378,12 @@ export default async function AdminResultsPage({
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-900">Winner</p>
                     <div className="mt-2 font-medium text-[color:var(--foreground)]">{category.winner.label}</div>
                     <div className="mt-2 text-sm text-[color:var(--muted)]">
-                      {category.winner.displayVotes} votes
-                      {category.winner.resolvedByAdmin ? " · Tie resolved by admin decision" : ""}
+                      <VoteCountDetails
+                        displayVotes={category.winner.displayVotes}
+                        rawVotes={category.winner.rawVotes}
+                        multiplier={category.winner.multiplier}
+                        resolvedByAdmin={category.winner.resolvedByAdmin}
+                      />
                     </div>
                   </div>
                 ) : (
@@ -279,7 +410,14 @@ export default async function AdminResultsPage({
                             </span>
                           ) : null}
                         </div>
-                        <div className="text-sm text-[color:var(--muted)]">{row.displayVotes} votes</div>
+                        <div className="text-right text-sm text-[color:var(--muted)]">
+                          <VoteCountDetails
+                            displayVotes={row.displayVotes}
+                            rawVotes={row.rawVotes}
+                            multiplier={row.multiplier}
+                            resolvedByAdmin={row.resolvedByAdmin}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>

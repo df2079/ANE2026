@@ -12,8 +12,12 @@ type RankedResultRow = {
   nomineeKey: string;
   nomineeBrandId: string | null;
   nomineePerfumeId: string | null;
+  resultBrandId: string | null;
   label: string;
+  rawVotes: number;
   votes: number;
+  multiplier: number;
+  adjustmentReason: string | null;
 };
 
 type DisplayResultRow = RankedResultRow & {
@@ -41,6 +45,12 @@ type RankedResultCategory = {
 export type ResultsCategory = RankedResultCategory;
 export type ResultsTieGroup = RankedTieGroup;
 export type ResultsRow = RankedResultRow;
+export type ResultAdjustmentRow = {
+  brandId: string;
+  brandName: string;
+  multiplier: number | null;
+  reason: string | null;
+};
 
 function getNomineeKey(row: { nominee_brand_id: string | null; nominee_perfume_id: string | null }) {
   return row.nominee_perfume_id ? `perfume:${row.nominee_perfume_id}` : `brand:${row.nominee_brand_id ?? "unknown"}`;
@@ -82,7 +92,7 @@ export async function getRankedResultCategories() {
     const { data, error } = await supabase
       .from("votes")
       .select(
-        "category_id, nominee_brand_id, nominee_perfume_id, brands:nominee_brand_id(display_name), perfumes:nominee_perfume_id(display_name, brands:brand_id(display_name))"
+        "category_id, nominee_brand_id, nominee_perfume_id, brands:nominee_brand_id(id, display_name), perfumes:nominee_perfume_id(display_name, brands:brand_id(id, display_name))"
       )
       .range(from, to);
 
@@ -94,13 +104,29 @@ export async function getRankedResultCategories() {
       category_id: string;
       nominee_brand_id: string | null;
       nominee_perfume_id: string | null;
-      brands: { display_name: string } | { display_name: string }[] | null;
+      brands: { id: string; display_name: string } | { id: string; display_name: string }[] | null;
       perfumes:
-        | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })
-        | ({ display_name: string; brands: { display_name: string } | { display_name: string }[] | null })[]
+        | ({ display_name: string; brands: { id: string; display_name: string } | { id: string; display_name: string }[] | null })
+        | ({ display_name: string; brands: { id: string; display_name: string } | { id: string; display_name: string }[] | null })[]
         | null;
     }>;
   });
+
+  const { data: adjustmentsData, error: adjustmentsError } = await supabase
+    .from("result_adjustments")
+    .select("brand_id, multiplier, reason");
+
+  if (adjustmentsError) {
+    throw adjustmentsError;
+  }
+
+  const adjustmentsByBrandId = new Map<string, { multiplier: number; reason: string | null }>();
+  for (const row of adjustmentsData ?? []) {
+    adjustmentsByBrandId.set(row.brand_id, {
+      multiplier: Number(row.multiplier),
+      reason: row.reason ?? null
+    });
+  }
 
   const { data: tieBreaksData, error: tieBreaksError } = await supabase
     .from("category_tie_breaks")
@@ -143,6 +169,7 @@ export async function getRankedResultCategories() {
         const brand = unwrapSingle(vote.brands);
         const nestedBrand = perfume ? unwrapSingle(perfume.brands) : null;
         const key = getNomineeKey(vote);
+        const resultBrandId = nestedBrand?.id ?? brand?.id ?? null;
         const label =
           perfume && nestedBrand
             ? `${nestedBrand.display_name} - ${perfume.display_name}`
@@ -153,13 +180,29 @@ export async function getRankedResultCategories() {
           nomineeKey: key,
           nomineeBrandId: vote.nominee_brand_id,
           nomineePerfumeId: vote.nominee_perfume_id,
+          resultBrandId,
           label,
-          votes: (current?.votes ?? 0) + 1
+          rawVotes: (current?.rawVotes ?? 0) + 1,
+          votes: 0,
+          multiplier: 1,
+          adjustmentReason: null
         });
       });
 
+    const adjustedRows = Array.from(counts.values()).map((row) => {
+      const adjustment = row.resultBrandId ? adjustmentsByBrandId.get(row.resultBrandId) : null;
+      const multiplier = adjustment?.multiplier ?? 1;
+
+      return {
+        ...row,
+        votes: Math.floor(row.rawVotes * multiplier),
+        multiplier,
+        adjustmentReason: adjustment?.reason ?? null
+      } satisfies RankedResultRow;
+    });
+
     const groupedByVotes = new Map<number, RankedResultRow[]>();
-    for (const row of counts.values()) {
+    for (const row of adjustedRows) {
       const group = groupedByVotes.get(row.votes) ?? [];
       group.push(row);
       groupedByVotes.set(row.votes, group);
@@ -234,6 +277,43 @@ export async function getRankedResultCategories() {
       winner: reviewRows[0] ?? null,
       unresolvedWinnerTie
     } satisfies RankedResultCategory;
+  });
+}
+
+export async function getResultAdjustmentRows(): Promise<ResultAdjustmentRow[]> {
+  const supabase = createSupabaseAdminClient();
+  const [{ data: brands, error: brandsError }, { data: adjustments, error: adjustmentsError }] = await Promise.all([
+    supabase.from("brands").select("id, display_name").eq("is_active", true).order("display_name"),
+    supabase.from("result_adjustments").select("brand_id, multiplier, reason")
+  ]);
+
+  if (brandsError) {
+    throw brandsError;
+  }
+
+  if (adjustmentsError) {
+    throw adjustmentsError;
+  }
+
+  const adjustmentsByBrandId = new Map(
+    (adjustments ?? []).map((adjustment) => [
+      adjustment.brand_id,
+      {
+        multiplier: Number(adjustment.multiplier),
+        reason: adjustment.reason ?? null
+      }
+    ])
+  );
+
+  return (brands ?? []).map((brand) => {
+    const adjustment = adjustmentsByBrandId.get(brand.id);
+
+    return {
+      brandId: brand.id,
+      brandName: brand.display_name,
+      multiplier: adjustment?.multiplier ?? null,
+      reason: adjustment?.reason ?? null
+    };
   });
 }
 
@@ -316,6 +396,7 @@ export async function getResultsData() {
   const settings = await getAppSettings();
   const lifecycle = getVotingLifecycle(settings);
   const rankedCategories = lifecycle.phase === "closed" ? await getRankedResultCategories() : [];
+  const resultAdjustments = await getResultAdjustmentRows();
   const hasUnresolvedPodiumTies = rankedCategories.some((category) => category.unresolvedWinnerTie !== null);
   const hasAnyRevealedWinners = rankedCategories.some((category) => category.revealedAt !== null);
   const allWinnersRevealed = rankedCategories.length > 0 && rankedCategories.every((category) => category.revealedAt !== null);
@@ -331,6 +412,7 @@ export async function getResultsData() {
     hasAnyRevealedWinners,
     allWinnersRevealed,
     categories: rankedCategories,
+    resultAdjustments,
     legacyRevealedAt: settings.results_revealed_at
   };
 }
